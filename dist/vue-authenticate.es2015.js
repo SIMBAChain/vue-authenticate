@@ -1103,7 +1103,7 @@ OAuth2.prototype.init = function init (userData) {
   var url = [this.providerConfig.authorizationEndpoint, this._stringifyRequestParams()].join('?');
 
   this.oauthPopup = new OAuthPopup(url, this.providerConfig.name, this.providerConfig.popupOptions);
-    
+
   return new Promise(function (resolve, reject) {
     this$1.oauthPopup.open(this$1.providerConfig.redirectUri).then(function (response) {
       if (this$1.providerConfig.responseType === 'token' || !this$1.providerConfig.url) {
@@ -1125,7 +1125,7 @@ OAuth2.prototype.init = function init (userData) {
  * Exchange temporary oauth data for access token
  * @author Sahat Yalkabov <https://github.com/sahat>
  * @copyright Method taken from https://github.com/sahat/satellizer
- * 
+ *
  * @param{[type]} oauth  [description]
  * @param{[type]} userData [description]
  * @return {[type]}        [description]
@@ -1149,7 +1149,7 @@ OAuth2.prototype.exchangeForToken = function exchangeForToken (oauth, userData) 
         payload[key] = this$1.providerConfig.redirectUri;
         break
       default:
-        payload[key] = oauth[key];
+        payload[key] = value || oauth[key];
     }
   }
 
@@ -1173,7 +1173,7 @@ OAuth2.prototype.exchangeForToken = function exchangeForToken (oauth, userData) 
  * Stringify oauth params
  * @author Sahat Yalkabov <https://github.com/sahat>
  * @copyright Method taken from https://github.com/sahat/satellizer
- * 
+ *
  * @return {String}
  */
 OAuth2.prototype._stringifyRequestParams = function _stringifyRequestParams () {
