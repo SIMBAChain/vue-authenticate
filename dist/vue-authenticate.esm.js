@@ -2,10 +2,8 @@
  * vue-authenticate v1.4.1
  * https://github.com/dgrubelic/vue-authenticate
  * Released under the MIT License.
- *
+ * 
  */
-
-'use strict';
 
 if (typeof Object.assign != 'function') {
   Object.assign = function(target, varArgs) {
@@ -76,10 +74,10 @@ function objectExtend(a, b) {
 }
 /**
  * Assemble url from two segments
- *
+ * 
  * @author Sahat Yalkabov <https://github.com/sahat>
  * @copyright Method taken from https://github.com/sahat/satellizer
- *
+ * 
  * @param  {String} baseUrl Base url
  * @param  {String} url     URI
  * @return {String}
@@ -101,10 +99,10 @@ function joinUrl(baseUrl, url) {
 
 /**
  * Get full path based on current location
- *
+ * 
  * @author Sahat Yalkabov <https://github.com/sahat>
  * @copyright Method taken from https://github.com/sahat/satellizer
- *
+ * 
  * @param  {Location} location
  * @return {String}
  */
@@ -117,10 +115,10 @@ function getFullUrlPath(location) {
 
 /**
  * Parse query string variables
- *
+ * 
  * @author Sahat Yalkabov <https://github.com/sahat>
  * @copyright Method taken from https://github.com/sahat/satellizer
- *
+ * 
  * @param  {String} Query string
  * @return {String}
  */
@@ -142,7 +140,7 @@ function parseQueryString(str) {
  * Decode base64 string
  * @author Sahat Yalkabov <https://github.com/sahat>
  * @copyright Method taken from https://github.com/sahat/satellizer
- *
+ * 
  * @param  {String} str base64 encoded string
  * @return {Object}
  */
@@ -741,7 +739,7 @@ class CookieStorage {
     try {
       return $document.cookie === 'undefined' ? '' : $document.cookie
     } catch (e) {}
-
+    
     return '';
   }
 
@@ -818,11 +816,11 @@ function StorageFactory(options) {
         $window.sessionStorage.removeItem('testKey');
         return new LocalStorage(options.storageNamespace)
       } catch (e) {}
-
+      
     case 'cookieStorage':
       return new CookieStorage(options.cookieStorage);
 
-    case 'memoryStorage':
+    case 'memoryStorage': 
     default:
       return new MemoryStorage(options.storageNamespace)
   }
@@ -830,9 +828,9 @@ function StorageFactory(options) {
 
 /**
  * OAuth2 popup management class
- *
+ * 
  * @author Sahat Yalkabov <https://github.com/sahat>
- * @copyright Class mostly taken from https://github.com/sahat/satellizer
+ * @copyright Class mostly taken from https://github.com/sahat/satellizer 
  * and adjusted to fit vue-authenticate library
  */
 class OAuthPopup {
@@ -938,7 +936,7 @@ class OAuth {
   }
 
   /**
-   * Initialize OAuth1 process
+   * Initialize OAuth1 process 
    * @param  {Object} userData User data
    * @return {Promise}
    */
@@ -1067,7 +1065,7 @@ class OAuth2 {
     let url = [this.providerConfig.authorizationEndpoint, this._stringifyRequestParams()].join('?');
 
     this.oauthPopup = new OAuthPopup(url, this.providerConfig.name, this.providerConfig.popupOptions);
-
+    
     return new Promise((resolve, reject) => {
       this.oauthPopup.open(this.providerConfig.redirectUri).then((response) => {
         if (this.providerConfig.responseType === 'token' || !this.providerConfig.url) {
@@ -1089,7 +1087,7 @@ class OAuth2 {
    * Exchange temporary oauth data for access token
    * @author Sahat Yalkabov <https://github.com/sahat>
    * @copyright Method taken from https://github.com/sahat/satellizer
-   *
+   * 
    * @param  {[type]} oauth    [description]
    * @param  {[type]} userData [description]
    * @return {[type]}          [description]
@@ -1135,7 +1133,7 @@ class OAuth2 {
    * Stringify oauth params
    * @author Sahat Yalkabov <https://github.com/sahat>
    * @copyright Method taken from https://github.com/sahat/satellizer
-   *
+   * 
    * @return {String}
    */
   _stringifyRequestParams() {
@@ -1349,7 +1347,7 @@ class VueAuthenticate {
 
   /**
    * Authenticate user using authentication provider
-   *
+   * 
    * @param  {String} provider       Provider name
    * @param  {Object} userData       User data
    * @return {Promise}               Request promise
@@ -1462,4 +1460,4 @@ plugin.factory = function ($http, options) {
   return new VueAuthenticate($http, options);
 };
 
-module.exports = plugin;
+export default plugin;
