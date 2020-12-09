@@ -1,4 +1,4 @@
-import Promise from './promise.js';
+import Promise from './promise.js'
 import { $window } from './globals.js';
 import {
   objectExtend,
@@ -8,11 +8,14 @@ import {
   joinUrl,
   decodeBase64,
   getObjectProperty,
-} from './utils.js';
-import defaultOptions from './options.js';
-import StorageFactory from './storage.js';
-import OAuth1 from './oauth/oauth1.js';
-import OAuth2 from './oauth/oauth2.js';
+  makeRequestOptions,
+  isUndefined,
+  parseJWT
+} from './utils.js'
+import defaultOptions from './options.js'
+import StorageFactory from './storage.js'
+import OAuth1 from './oauth/oauth1.js'
+import OAuth2 from './oauth/oauth2.js'
 
 export default class VueAuthenticate {
   constructor($http, overrideOptions) {
@@ -46,9 +49,29 @@ export default class VueAuthenticate {
           } else {
             return this.options.tokenName;
           }
-        },
+        }
       },
-    });
+
+      refreshTokenName: {
+        get() {
+          if (this.options.refreshTokenPrefix) {
+            return [this.options.refreshTokenPrefix, this.options.refreshTokenName].join('_')
+          } else {
+            return this.options.refreshTokenName
+          }
+        }
+      },
+
+      expirationName: {
+        get() {
+          if (this.options.expirationPrefix) {
+            return [this.options.expirationPrefix, this.options.expirationName].join('_')
+          } else {
+            return this.options.expirationName
+          }
+        }
+      }
+    })
 
     // Setup request interceptors
     if (
@@ -58,6 +81,13 @@ export default class VueAuthenticate {
       this.options.bindRequestInterceptor.call(this, this);
     } else {
       throw new Error('Request interceptor must be functions');
+    }
+
+    // Setup response interceptors
+    if (this.options.bindResponseInterceptor && isFunction(this.options.bindResponseInterceptor)) {
+      this.options.bindResponseInterceptor.call(this, this)
+    } else {
+      throw new Error('Response interceptor must be functions')
     }
   }
 
@@ -76,11 +106,9 @@ export default class VueAuthenticate {
         // Token with a valid JWT format XXX.YYY.ZZZ
         try {
           // Could be a valid JWT or an access token with the same format
-          const base64Url = token.split('.')[1];
-          const base64 = base64Url.replace('-', '+').replace('_', '/');
-          const exp = JSON.parse($window.atob(base64)).exp;
+          const exp = parseJWT(token).exp;
           if (typeof exp === 'number') {
-            // JWT with an optonal expiration claims
+            // JWT with an optional expiration claims
             return Math.round(new Date().getTime() / 1000) < exp;
           }
         } catch (e) {
@@ -93,6 +121,15 @@ export default class VueAuthenticate {
   }
 
   /**
+   * Returns if a token is set
+   * @returns {boolean}
+   */
+  isTokenSet() {
+    if (isUndefined(this.getToken())) return false;
+    return !!this.getToken()
+  }
+
+  /**
    * Get token if user is authenticated
    * @return {String} Authentication token
    */
@@ -102,7 +139,7 @@ export default class VueAuthenticate {
 
   /**
    * Set new authentication token
-   * @param {String|Object} token
+   * @param {String|Object} response
    */
   setToken(response, tokenPath) {
     if (response[this.options.responseDataKey]) {
@@ -117,6 +154,92 @@ export default class VueAuthenticate {
     }
   }
 
+  /**
+   * Get refresh token
+   * @returns {String|null} refresh token
+   */
+  getRefreshToken() {
+    if (this.options.refreshType === 'storage')
+      return this.storage.getItem(this.refreshTokenName)
+
+    return null;
+  }
+
+  /**
+   * Get expiration of the access token
+   * @returns {number|null} expiration
+   */
+  getExpiration() {
+    if (this.options.refreshType)
+      return this.storage.getItem(this.expirationName)
+    return null;
+  }
+
+  /**
+   * Set new refresh token
+   * @param {String|Object} response
+   * @returns {String|Object} response
+   */
+  setRefreshToken(response) {
+    // Check if refresh token is required
+    if (!this.options.refreshType) {
+      return;
+    }
+
+    if (response[this.options.responseDataKey]) {
+      response = response[this.options.responseDataKey];
+    }
+
+    this.setExpiration(response)
+    // set refresh token if it's not provided over a HttpOnly cookie
+    if (!(this.options.refreshType === 'storage')) {
+      return response;
+    }
+
+    let refresh_token;
+    if (response.refresh_token) {
+      refresh_token = response.refresh_token;
+    }
+
+    if (!refresh_token && response) {
+      refresh_token = response[this.options.expirationName]
+    }
+
+    if (refresh_token) {
+      this.storage.setItem(this.refreshTokenName, refresh_token)
+    }
+
+    return response
+  }
+
+  /**
+   * Sets the expiration of the access token
+   * @param {String|Object} response
+   * @returns {String|Object} response
+   */
+  setExpiration(response) {
+    // set expiration of access token
+    let expiration;
+    if (response.expires_in) {
+      let expires_in = parseInt(response.expires_in)
+      if (isNaN(expires_in)) expires_in = 0
+      expiration = Math.round(new Date().getTime() / 1000) + expires_in
+    }
+
+    if (!expiration && response) {
+      let expires_in = parseInt(response[this.options.expirationName])
+      if (isNaN(expires_in)) expires_in = 0
+      expiration = Math.round(new Date().getTime() / 1000) + expires_in
+    }
+
+    if (expiration) {
+      this.storage.setItem(this.expirationName, expiration)
+    }
+
+    return response
+  }
+
+
   getPayload() {
     const token = this.storage.getItem(this.tokenName);
 
@@ -125,7 +248,8 @@ export default class VueAuthenticate {
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace('-', '+').replace('_', '/');
         return JSON.parse(decodeBase64(base64));
-      } catch (e) {}
+      } catch (e) {
+      }
     }
   }
 
@@ -136,20 +260,21 @@ export default class VueAuthenticate {
    * @return {Promise}               Request promise
    */
   login(user, requestOptions) {
-    requestOptions = requestOptions || {};
-    requestOptions.url = requestOptions.url
-      ? requestOptions.url
-      : joinUrl(this.options.baseUrl, this.options.loginUrl);
-    requestOptions[this.options.requestDataKey] =
-      user || requestOptions[this.options.requestDataKey];
-    requestOptions.method = requestOptions.method || 'POST';
-    requestOptions.withCredentials =
-      requestOptions.withCredentials || this.options.withCredentials;
+    requestOptions = makeRequestOptions(requestOptions, this.options, 'loginUrl', user);
 
-    return this.$http(requestOptions).then(response => {
-      this.setToken(response);
-      return response;
-    });
+    return this.$http(requestOptions)
+      .then(response => {
+        this.setToken(response)
+        this.setRefreshToken(response)
+        // Check if we are authenticated
+        if(this.isAuthenticated()){
+          return Promise.resolve(response);
+        }
+        throw new Error('Server did not provided an access token.');
+      })
+      .catch(error => {
+        return Promise.reject(error)
+      })
   }
 
   /**
@@ -159,20 +284,15 @@ export default class VueAuthenticate {
    * @return {Promise}               Request promise
    */
   register(user, requestOptions) {
-    requestOptions = requestOptions || {};
-    requestOptions.url = requestOptions.url
-      ? requestOptions.url
-      : joinUrl(this.options.baseUrl, this.options.registerUrl);
-    requestOptions[this.options.requestDataKey] =
-      user || requestOptions[this.options.requestDataKey];
-    requestOptions.method = requestOptions.method || 'POST';
-    requestOptions.withCredentials =
-      requestOptions.withCredentials || this.options.withCredentials;
+    requestOptions = makeRequestOptions(requestOptions, this.options, 'registerUrl', user)
 
-    return this.$http(requestOptions).then(response => {
-      this.setToken(response);
-      return response;
-    });
+    return this.$http(requestOptions)
+      .then((response) => {
+        this.setToken(response);
+        this.setRefreshToken(response);
+        return Promise.resolve(response);
+      })
+      .catch(err => Promise.reject(err))
   }
 
   /**
@@ -199,14 +319,53 @@ export default class VueAuthenticate {
       requestOptions.withCredentials =
         requestOptions.withCredentials || this.options.withCredentials;
 
-      return this.$http(requestOptions).then(response => {
-        this.storage.removeItem(this.tokenName);
-        return response;
-      });
+      return this.$http(requestOptions)
+        .then((response) => {
+          this.storage.removeItem(this.tokenName);
+          return Promise.resolve(response);
+        })
+        .catch(err => Promise.reject(err))
     } else {
       this.storage.removeItem(this.tokenName);
       return Promise.resolve();
     }
+  }
+
+  /**
+   * Refresh access token
+   * @param requestOptions  Request options
+   * @returns {Promise}     Request Promise
+   */
+  refresh(requestOptions) {
+    if (!this.options.storageType)
+      throw new Error('Refreshing is not set');
+
+    let data = {};
+
+    if (this.options.refreshType === 'storage')
+      data.refresh_token = this.getRefreshToken();
+
+    requestOptions = makeRequestOptions(requestOptions, this.options, 'refreshUrl', data);
+    return this.$http(requestOptions)
+      .then((response) => {
+        this.setToken(response);
+        this.setRefreshToken(response);
+        return Promise.resolve(response);
+      })
+      .catch((error) => {
+        this.clearStorage();
+        return Promise.reject(error);
+      })
+
+  }
+
+  /**
+   * Remove all item from the storage
+   */
+  clearStorage() {
+    this.storage.removeItem(this.tokenName)
+    this.storage.removeItem(this.expirationName)
+    this.storage.removeItem(this.refreshTokenName)
   }
 
   /**

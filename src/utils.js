@@ -284,3 +284,23 @@ export function getObjectProperty(objectRef, propertyName) {
 
   return value;
 }
+
+export function makeRequestOptions(requestOptions, options, urlName, user) {
+  requestOptions = requestOptions || {};
+  requestOptions.url = requestOptions.url
+    ? requestOptions.url
+    : joinUrl(this.options.baseUrl, this.options.loginUrl);
+  requestOptions[this.options.requestDataKey] =
+    user || requestOptions[this.options.requestDataKey];
+  requestOptions.method = requestOptions.method || 'POST';
+  requestOptions.withCredentials =
+    requestOptions.withCredentials || this.options.withCredentials;
+
+  return requestOptions
+}
+
+export function parseJWT(token) {
+  const base64Url = token.split('.')[1];
+  const base64 = base64Url.replace('-', '+').replace('_', '/');
+  return JSON.parse(window.atob(base64));
+}
