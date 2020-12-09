@@ -287,14 +287,12 @@ export function getObjectProperty(objectRef, propertyName) {
 
 export function makeRequestOptions(requestOptions, options, urlName, user) {
   requestOptions = requestOptions || {};
-  requestOptions.url = requestOptions.url
-    ? requestOptions.url
-    : joinUrl(this.options.baseUrl, this.options.loginUrl);
-  requestOptions[this.options.requestDataKey] =
-    user || requestOptions[this.options.requestDataKey];
+  requestOptions.url = requestOptions.url || options.url || joinUrl(options.baseUrl, options.loginUrl);
+  requestOptions[options.requestDataKey] =
+    user || requestOptions[options.requestDataKey];
   requestOptions.method = requestOptions.method || 'POST';
   requestOptions.withCredentials =
-    requestOptions.withCredentials || this.options.withCredentials;
+    requestOptions.withCredentials || options.withCredentials;
 
   return requestOptions
 }

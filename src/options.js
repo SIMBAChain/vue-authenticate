@@ -25,6 +25,7 @@ export function getRedirectUri(uri) {
 export default {
   baseUrl: null,
   tokenPath: 'access_token',
+  refreshTokenPath: 'refresh_token',
   tokenName: 'token',
   tokenPrefix: 'vueauth',
   tokenHeader: 'Authorization',
@@ -36,6 +37,7 @@ export default {
   refreshType: null,
   refreshTokenName: 'refresh_token',
   refreshTokenPrefix: null,
+  pkce: false,
   expirationName: 'expiration',
   expirationPrefix: null,
   loginUrl: '/auth/login',
@@ -83,6 +85,7 @@ export default {
       // 1. unauthorized
       // 2. refreshType is set
       // 3. any token is set
+      // if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
       if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
 
         // check if we are already refreshing, to prevent endless loop

@@ -4,8 +4,13 @@ import {
   isFunction,
   isString,
   objectExtend,
-  joinUrl,
+  joinUrl, makeRequestOptions,
 } from '../utils.js';
+
+import sha256 from 'crypto-js/sha256';
+import Base64 from 'crypto-js/enc-base64';
+import WordArray from 'crypto-js/lib-typedarrays';
+import Promise from "../promise";
 
 /**
  * Default provider configuration
@@ -24,10 +29,19 @@ const defaultProviderConfig = {
   requiredUrlParams: null,
   defaultUrlParams: ['response_type', 'client_id', 'redirect_uri'],
   responseType: 'code',
+  tokenRequestAsForm: false,
+  refreshRequestAsForm: false,
+  refreshGrantType: null,
+  pkce: false,
   responseParams: {
     code: 'code',
     clientId: 'clientId',
     redirectUri: 'redirectUri',
+  },
+  refreshParams: {
+    clientId: 'clientId',
+    grantType: 'grantType',
+    scope: 'scope'
   },
   oauthType: '2.0',
   popupOptions: {},
@@ -42,6 +56,15 @@ export default class OAuth2 {
     this.options = options;
   }
 
+  getRandomString(key) {
+    if(!this.storage.getItem(key)) {
+      this.storage.setItem(key, WordArray.random(64));
+    }
+
+    console.log(this.storage.getItem(key));
+    return this.storage.getItem(key);
+  }
+
   init(userData) {
     let stateName = this.providerConfig.name + '_state';
     if (isFunction(this.providerConfig.state)) {
@@ -54,6 +77,17 @@ export default class OAuth2 {
       this.providerConfig.authorizationEndpoint,
       this._stringifyRequestParams(),
     ].join('?');
+
+
+    if(this.providerConfig.pkce === 'S256'){
+      if(this.providerConfig.responseType !== 'code'){
+        throw new Error(`Cannot use PKCE with response type ${this.providerConfig.responseType}`);
+      }
+      const hashed = sha256(this.getRandomString(this.providerConfig.name + '_pkce'));
+      var pkce_challenge = Base64.stringify(hashed).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      url = `${url}&code_challenge=${encodeURIComponent(pkce_challenge)}&code_challenge_method=S256`
+    }
 
     this.oauthPopup = new OAuthPopup(
       url,
@@ -83,7 +117,10 @@ export default class OAuth2 {
             );
           }
 
-          resolve(this.exchangeForToken(response, userData));
+          this.exchangeForToken(response, userData).then((response)=>{
+            this.storage.removeItem(this.providerConfig.name + '_pkce');
+            return response.data;
+          }).then(resolve);
         })
         .catch(err => {
           reject(err);
@@ -130,6 +167,22 @@ export default class OAuth2 {
       exchangeTokenUrl = joinUrl(this.options.baseUrl, this.providerConfig.url);
     } else {
       exchangeTokenUrl = this.providerConfig.url;
+    }
+
+    let pkceVerifier = this.getRandomString(this.providerConfig.name + '_pkce');
+    if(pkceVerifier){
+      payload['code_verifier'] = pkceVerifier;
+      payload['grant_type'] = 'authorization_code';
+      console.log(pkceVerifier);
+    }
+
+    if(this.providerConfig.tokenRequestAsForm){
+      var form = new FormData();
+      for (let key in payload) {
+        let value = payload[key];
+        form.append(key, value);
+      }
+      payload = form;
     }
 
     return this.$http.post(exchangeTokenUrl, payload, {
@@ -186,5 +239,61 @@ export default class OAuth2 {
         return param.join('=');
       })
       .join('&');
+  }
+
+  /**
+   * Get refresh token
+   * @returns {String|null} refresh token
+   */
+  getRefreshToken(name) {
+    if (this.options.refreshType === 'storage')
+      return this.storage.getItem(name)
+
+    return null;
+  }
+
+  /**
+   * Refresh access token
+   * @param requestOptions  Request options
+   * @returns {Promise}     Request Promise
+   */
+  refresh(refreshTokenName) {
+    if (!this.options.storageType) {
+      throw new Error('Refreshing is not set');
+    }
+
+    let data = {};
+
+    if (this.options.refreshType === 'storage')
+      data.refresh_token = this.getRefreshToken(refreshTokenName);
+
+    for (let key in this.providerConfig.refreshParams) {
+      let value = this.providerConfig.refreshParams[key];
+
+      switch (key) {
+        case 'clientId':
+          data[value] = this.providerConfig.clientId
+          break
+        case 'grantType':
+          data[value] = this.providerConfig.refreshGrantType
+          break
+        default:
+          data[value] = this.providerConfig[key]
+      }
+    }
+
+    if (this.providerConfig.refreshRequestAsForm) {
+      var form = new FormData();
+      for (let key in data) {
+        let value = data[key];
+
+        form.set(key, value);
+      }
+
+      data = form;
+    }
+
+    var requestOptions = makeRequestOptions(this.providerConfig, this.options, 'refreshUrl', data);
+    return this.$http(requestOptions);
   }
 }

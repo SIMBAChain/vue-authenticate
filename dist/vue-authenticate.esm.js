@@ -5,6 +5,10 @@
  * 
  */
 
+import sha256 from 'crypto-js/sha256';
+import Base64 from 'crypto-js/enc-base64';
+import WordArray from 'crypto-js/lib-typedarrays';
+
 if (typeof Object.assign != 'function') {
   Object.assign = function (target, varArgs) {
     if (target == null) {
@@ -285,14 +289,12 @@ function getObjectProperty(objectRef, propertyName) {
 
 function makeRequestOptions(requestOptions, options, urlName, user) {
   requestOptions = requestOptions || {};
-  requestOptions.url = requestOptions.url
-    ? requestOptions.url
-    : joinUrl(this.options.baseUrl, this.options.loginUrl);
-  requestOptions[this.options.requestDataKey] =
-    user || requestOptions[this.options.requestDataKey];
+  requestOptions.url = requestOptions.url || options.url || joinUrl(options.baseUrl, options.loginUrl);
+  requestOptions[options.requestDataKey] =
+    user || requestOptions[options.requestDataKey];
   requestOptions.method = requestOptions.method || 'POST';
   requestOptions.withCredentials =
-    requestOptions.withCredentials || this.options.withCredentials;
+    requestOptions.withCredentials || options.withCredentials;
 
   return requestOptions
 }
@@ -563,11 +565,11 @@ const fakeWindow = {
   },
 };
 
-const $document = (typeof document !== undefined)
+const $document = (typeof document !== 'undefined')
   ? document
   : fakeDocument;
 
-const $window = (typeof window !== undefined)
+const $window = (typeof window !== 'undefined')
   ? window
   : fakeWindow;
 
@@ -595,6 +597,7 @@ function getRedirectUri(uri) {
 var defaultOptions = {
   baseUrl: null,
   tokenPath: 'access_token',
+  refreshTokenPath: 'refresh_token',
   tokenName: 'token',
   tokenPrefix: 'vueauth',
   tokenHeader: 'Authorization',
@@ -606,6 +609,7 @@ var defaultOptions = {
   refreshType: null,
   refreshTokenName: 'refresh_token',
   refreshTokenPrefix: null,
+  pkce: false,
   expirationName: 'expiration',
   expirationPrefix: null,
   loginUrl: '/auth/login',
@@ -653,6 +657,7 @@ var defaultOptions = {
       // 1. unauthorized
       // 2. refreshType is set
       // 3. any token is set
+      // if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
       if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
 
         // check if we are already refreshing, to prevent endless loop
@@ -860,7 +865,7 @@ class CookieStorage {
   }
 }
 
-class LocalStorage$1 {
+class LocalStorage {
   constructor(namespace) {
     this.namespace = namespace || null;
   }
@@ -911,20 +916,45 @@ class MemoryStorage {
   }
 }
 
+class SessionStorage {
+  constructor(namespace) {
+    this.namespace = namespace || null;
+  }
+
+  setItem(key, value) {
+    $window.sessionStorage.setItem(this._getStorageKey(key), value);
+  }
+
+  getItem(key) {
+    return $window.sessionStorage.getItem(this._getStorageKey(key));
+  }
+
+  removeItem(key) {
+    $window.sessionStorage.removeItem(this._getStorageKey(key));
+  }
+
+  _getStorageKey(key) {
+    if (this.namespace) {
+      return [this.namespace, key].join('.');
+    }
+    return key;
+  }
+}
+
 function StorageFactory(options) {
   switch (options.storageType) {
     case 'localStorage':
       try {
         $window.localStorage.setItem('testKey', 'test');
         $window.localStorage.removeItem('testKey');
-        return new LocalStorage$1(options.storageNamespace);
+        return new LocalStorage(options.storageNamespace);
       } catch (e) {}
 
     case 'sessionStorage':
       try {
         $window.sessionStorage.setItem('testKey', 'test');
         $window.sessionStorage.removeItem('testKey');
-        return new LocalStorage(options.storageNamespace);
+        return new SessionStorage(options.storageNamespace);
       } catch (e) {}
 
     case 'cookieStorage':
@@ -1176,10 +1206,19 @@ const defaultProviderConfig$1 = {
   requiredUrlParams: null,
   defaultUrlParams: ['response_type', 'client_id', 'redirect_uri'],
   responseType: 'code',
+  tokenRequestAsForm: false,
+  refreshRequestAsForm: false,
+  refreshGrantType: null,
+  pkce: false,
   responseParams: {
     code: 'code',
     clientId: 'clientId',
     redirectUri: 'redirectUri',
+  },
+  refreshParams: {
+    clientId: 'clientId',
+    grantType: 'grantType',
+    scope: 'scope'
   },
   oauthType: '2.0',
   popupOptions: {},
@@ -1192,6 +1231,15 @@ class OAuth2 {
     this.providerConfig = objectExtend({}, defaultProviderConfig$1);
     this.providerConfig = objectExtend(this.providerConfig, providerConfig);
     this.options = options;
+  }
+
+  getRandomString(key) {
+    if(!this.storage.getItem(key)) {
+      this.storage.setItem(key, WordArray.random(64));
+    }
+
+    console.log(this.storage.getItem(key));
+    return this.storage.getItem(key);
   }
 
   init(userData) {
@@ -1207,13 +1255,24 @@ class OAuth2 {
       this._stringifyRequestParams(),
     ].join('?');
 
+
+    if(this.providerConfig.pkce === 'S256'){
+      if(this.providerConfig.responseType !== 'code'){
+        throw new Error(`Cannot use PKCE with response type ${this.providerConfig.responseType}`);
+      }
+      const hashed = sha256(this.getRandomString(this.providerConfig.name + '_pkce'));
+      var pkce_challenge = Base64.stringify(hashed).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      url = `${url}&code_challenge=${encodeURIComponent(pkce_challenge)}&code_challenge_method=S256`;
+    }
+
     this.oauthPopup = new OAuthPopup(
       url,
       this.providerConfig.name,
       this.providerConfig.popupOptions
     );
 
-    return new Promise((resolve, reject) => {
+    return new Promise$1((resolve, reject) => {
       this.oauthPopup
         .open(this.providerConfig.redirectUri)
         .then(response => {
@@ -1235,7 +1294,10 @@ class OAuth2 {
             );
           }
 
-          resolve(this.exchangeForToken(response, userData));
+          this.exchangeForToken(response, userData).then((response)=>{
+            this.storage.removeItem(this.providerConfig.name + '_pkce');
+            return response.data;
+          }).then(resolve);
         })
         .catch(err => {
           reject(err);
@@ -1282,6 +1344,22 @@ class OAuth2 {
       exchangeTokenUrl = joinUrl(this.options.baseUrl, this.providerConfig.url);
     } else {
       exchangeTokenUrl = this.providerConfig.url;
+    }
+
+    let pkceVerifier = this.getRandomString(this.providerConfig.name + '_pkce');
+    if(pkceVerifier){
+      payload['code_verifier'] = pkceVerifier;
+      payload['grant_type'] = 'authorization_code';
+      console.log(pkceVerifier);
+    }
+
+    if(this.providerConfig.tokenRequestAsForm){
+      var form = new FormData();
+      for (let key in payload) {
+        let value = payload[key];
+        form.append(key, value);
+      }
+      payload = form;
     }
 
     return this.$http.post(exchangeTokenUrl, payload, {
@@ -1338,6 +1416,62 @@ class OAuth2 {
         return param.join('=');
       })
       .join('&');
+  }
+
+  /**
+   * Get refresh token
+   * @returns {String|null} refresh token
+   */
+  getRefreshToken(name) {
+    if (this.options.refreshType === 'storage')
+      return this.storage.getItem(name)
+
+    return null;
+  }
+
+  /**
+   * Refresh access token
+   * @param requestOptions  Request options
+   * @returns {Promise}     Request Promise
+   */
+  refresh(refreshTokenName) {
+    if (!this.options.storageType) {
+      throw new Error('Refreshing is not set');
+    }
+
+    let data = {};
+
+    if (this.options.refreshType === 'storage')
+      data.refresh_token = this.getRefreshToken(refreshTokenName);
+
+    for (let key in this.providerConfig.refreshParams) {
+      let value = this.providerConfig.refreshParams[key];
+
+      switch (key) {
+        case 'clientId':
+          data[value] = this.providerConfig.clientId;
+          break
+        case 'grantType':
+          data[value] = this.providerConfig.refreshGrantType;
+          break
+        default:
+          data[value] = this.providerConfig[key];
+      }
+    }
+
+    if (this.providerConfig.refreshRequestAsForm) {
+      var form = new FormData();
+      for (let key in data) {
+        let value = data[key];
+
+        form.set(key, value);
+      }
+
+      data = form;
+    }
+
+    var requestOptions = makeRequestOptions(this.providerConfig, this.options, 'refreshUrl', data);
+    return this.$http(requestOptions);
   }
 }
 
@@ -1479,17 +1613,6 @@ class VueAuthenticate {
   }
 
   /**
-   * Get refresh token
-   * @returns {String|null} refresh token
-   */
-  getRefreshToken() {
-    if (this.options.refreshType === 'storage')
-      return this.storage.getItem(this.refreshTokenName)
-
-    return null;
-  }
-
-  /**
    * Get expiration of the access token
    * @returns {number|null} expiration
    */
@@ -1502,9 +1625,10 @@ class VueAuthenticate {
   /**
    * Set new refresh token
    * @param {String|Object} response
+   * @param {String} tokenPath
    * @returns {String|Object} response
    */
-  setRefreshToken(response) {
+  setRefreshToken(response, tokenPath) {
     // Check if refresh token is required
     if (!this.options.refreshType) {
       return;
@@ -1520,10 +1644,8 @@ class VueAuthenticate {
       return response;
     }
 
-    let refresh_token;
-    if (response.refresh_token) {
-      refresh_token = response.refresh_token;
-    }
+    const refreshTokenPath = tokenPath || this.options.refreshTokenPath;
+    let refresh_token = getObjectProperty(response, refreshTokenPath);
 
     if (!refresh_token && response) {
       refresh_token = response[this.options.expirationName];
@@ -1660,27 +1782,40 @@ class VueAuthenticate {
    * @param requestOptions  Request options
    * @returns {Promise}     Request Promise
    */
-  refresh(requestOptions) {
-    if (!this.options.storageType)
-      throw new Error('Refreshing is not set');
+  refresh(provider) {
+    return new Promise$1((resolve, reject) => {
+      var providerConfig = this.options.providers[provider];
+      if (!providerConfig) {
+        return reject(new Error('Unknown provider'));
+      }
 
-    let data = {};
+      let providerInstance;
+      switch (providerConfig.oauthType) {
+        case '2.0':
+          providerInstance = new OAuth2(
+            this.$http,
+            this.storage,
+            providerConfig,
+            this.options
+          );
+          break;
+        default:
+          return reject(new Error('Invalid OAuth type for refresh'));
+      }
 
-    if (this.options.refreshType === 'storage')
-      data.refresh_token = this.getRefreshToken();
-
-    requestOptions = makeRequestOptions(requestOptions, this.options, 'refreshUrl', data);
-    return this.$http(requestOptions)
-      .then((response) => {
-        this.setToken(response);
-        this.setRefreshToken(response);
-        return Promise$1.resolve(response);
-      })
-      .catch((error) => {
-        this.clearStorage();
-        return Promise$1.reject(error);
-      })
-
+      return providerInstance
+        .refresh(this.refreshTokenName)
+        .then((response) => {
+          this.setToken(response);
+          this.setRefreshToken(response);
+          return Promise$1.resolve(response);
+        })
+        .catch((error) => {
+          this.clearStorage();
+          return Promise$1.reject(error);
+        })
+        .catch(err => reject(err));
+    });
   }
 
   /**
@@ -1732,6 +1867,7 @@ class VueAuthenticate {
         .init(userData)
         .then(response => {
           this.setToken(response, providerConfig.tokenPath);
+          this.setRefreshToken(response, providerConfig.refreshTokenPath);
 
           if (this.isAuthenticated()) {
             return resolve(response);

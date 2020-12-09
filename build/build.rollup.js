@@ -4,6 +4,7 @@ var uglify = require('uglify-js');
 var buble = require('@rollup/plugin-buble');
 var uglify = require('rollup-plugin-uglify').uglify;
 var rollupBanner = require('rollup-plugin-banner').default;
+var eslint  = require('rollup-plugin-eslint').eslint;
 var package = require('../package.json');
 
 var banner =
@@ -27,7 +28,7 @@ function buildSource(inputOptions, outputOptions) {
 buildSource(
   {
     input: 'src/index.js',
-    plugins: [buble(), rollupBanner(banner)],
+    plugins: [eslint(), buble(), rollupBanner(banner)],
   },
   {
     file: 'dist/vue-authenticate.js',

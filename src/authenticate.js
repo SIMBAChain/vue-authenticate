@@ -155,17 +155,6 @@ export default class VueAuthenticate {
   }
 
   /**
-   * Get refresh token
-   * @returns {String|null} refresh token
-   */
-  getRefreshToken() {
-    if (this.options.refreshType === 'storage')
-      return this.storage.getItem(this.refreshTokenName)
-
-    return null;
-  }
-
-  /**
    * Get expiration of the access token
    * @returns {number|null} expiration
    */
@@ -178,9 +167,10 @@ export default class VueAuthenticate {
   /**
    * Set new refresh token
    * @param {String|Object} response
+   * @param {String} tokenPath
    * @returns {String|Object} response
    */
-  setRefreshToken(response) {
+  setRefreshToken(response, tokenPath) {
     // Check if refresh token is required
     if (!this.options.refreshType) {
       return;
@@ -196,10 +186,8 @@ export default class VueAuthenticate {
       return response;
     }
 
-    let refresh_token;
-    if (response.refresh_token) {
-      refresh_token = response.refresh_token;
-    }
+    const refreshTokenPath = tokenPath || this.options.refreshTokenPath;
+    let refresh_token = getObjectProperty(response, refreshTokenPath);
 
     if (!refresh_token && response) {
       refresh_token = response[this.options.expirationName]
@@ -336,27 +324,40 @@ export default class VueAuthenticate {
    * @param requestOptions  Request options
    * @returns {Promise}     Request Promise
    */
-  refresh(requestOptions) {
-    if (!this.options.storageType)
-      throw new Error('Refreshing is not set');
+  refresh(provider) {
+    return new Promise((resolve, reject) => {
+      var providerConfig = this.options.providers[provider];
+      if (!providerConfig) {
+        return reject(new Error('Unknown provider'));
+      }
 
-    let data = {};
+      let providerInstance;
+      switch (providerConfig.oauthType) {
+        case '2.0':
+          providerInstance = new OAuth2(
+            this.$http,
+            this.storage,
+            providerConfig,
+            this.options
+          );
+          break;
+        default:
+          return reject(new Error('Invalid OAuth type for refresh'));
+      }
 
-    if (this.options.refreshType === 'storage')
-      data.refresh_token = this.getRefreshToken();
-
-    requestOptions = makeRequestOptions(requestOptions, this.options, 'refreshUrl', data);
-    return this.$http(requestOptions)
-      .then((response) => {
-        this.setToken(response);
-        this.setRefreshToken(response);
-        return Promise.resolve(response);
-      })
-      .catch((error) => {
-        this.clearStorage();
-        return Promise.reject(error);
-      })
-
+      return providerInstance
+        .refresh(this.refreshTokenName)
+        .then((response) => {
+          this.setToken(response);
+          this.setRefreshToken(response);
+          return Promise.resolve(response);
+        })
+        .catch((error) => {
+          this.clearStorage();
+          return Promise.reject(error);
+        })
+        .catch(err => reject(err));
+    });
   }
 
   /**
@@ -408,6 +409,7 @@ export default class VueAuthenticate {
         .init(userData)
         .then(response => {
           this.setToken(response, providerConfig.tokenPath);
+          this.setRefreshToken(response, providerConfig.refreshTokenPath)
 
           if (this.isAuthenticated()) {
             return resolve(response);

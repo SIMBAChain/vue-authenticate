@@ -5,15 +5,18 @@
     "sourceType": "module"
   },
   "env": {
-    "browser": true,
+    "browser": true
   },
-  "extends": "standard",
+  "extends": [
+    "eslint:recommended"
+  ],
   "plugins": [
+    "only-warn",
     "html"
   ],
   "rules": {
     "arrow-parens": 0,
-    "generator-star-spacing': 0
+    "generator-star-spacing": 0
   }
 }
 
