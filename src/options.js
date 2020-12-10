@@ -92,18 +92,26 @@ export default {
         if (!$auth._isRefreshing) {
           $auth._isRefreshing = true
           // Try to refresh our token
-          return $auth.refresh()
-            .then(response => {
-              // refreshing was successful :)
-              $auth._isRefreshing = false
-              // send original request
-              return $auth.$http(originalRequest)
-            })
-            .catch(error => {
-              // Refreshing fails :(
-              $auth._isRefreshing = false
-              return Promise.reject(error)
-            })
+          try {
+            return $auth.refresh()
+              .then(response => {
+                // refreshing was successful :)
+                $auth._isRefreshing = false
+                // send original request
+                return $auth.$http(originalRequest)
+              })
+              .catch(error => {
+                // Refreshing fails :(
+                $auth._isRefreshing = false
+                return Promise.reject(error)
+              })
+          }catch (e){
+            console.log("Shouldn't be here!");
+            console.log(e);
+            $auth._isRefreshing = false
+            return Promise.reject(error)
+
+          }
         }
       }
       return Promise.reject(error)

@@ -1,5 +1,5 @@
 /**
- * vue-authenticate v1.4.1
+ * vue-authenticate v1.5.0
  * https://github.com/dgrubelic/vue-authenticate
  * Released under the MIT License.
  * 
@@ -342,14 +342,14 @@ function handle(self, deferred) {
   Promise$1._immediateFn(function () {
     var cb = self._state === 1 ? deferred.onFulfilled : deferred.onRejected;
     if (cb === null) {
-      (self._state === 1 ? resolve : reject)(deferred.promise, self._value);
+      (self._state === 1 ? resolve : reject$1)(deferred.promise, self._value);
       return;
     }
     var ret;
     try {
       ret = cb(self._value);
     } catch (e) {
-      reject(deferred.promise, e);
+      reject$1(deferred.promise, e);
       return;
     }
     resolve(deferred.promise, ret);
@@ -380,11 +380,11 @@ function resolve(self, newValue) {
     self._value = newValue;
     finale(self);
   } catch (e) {
-    reject(self, e);
+    reject$1(self, e);
   }
 }
 
-function reject(self, newValue) {
+function reject$1(self, newValue) {
   self._state = 2;
   self._value = newValue;
   finale(self);
@@ -429,13 +429,13 @@ function doResolve(fn, self) {
       function (reason) {
         if (done) return;
         done = true;
-        reject(self, reason);
+        reject$1(self, reason);
       }
     );
   } catch (ex) {
     if (done) return;
     done = true;
-    reject(self, ex);
+    reject$1(self, ex);
   }
 }
 
@@ -664,18 +664,26 @@ var defaultOptions = {
         if (!$auth._isRefreshing) {
           $auth._isRefreshing = true;
           // Try to refresh our token
-          return $auth.refresh()
-            .then(response => {
-              // refreshing was successful :)
-              $auth._isRefreshing = false;
-              // send original request
-              return $auth.$http(originalRequest)
-            })
-            .catch(error => {
-              // Refreshing fails :(
-              $auth._isRefreshing = false;
-              return Promise.reject(error)
-            })
+          try {
+            return $auth.refresh()
+              .then(response => {
+                // refreshing was successful :)
+                $auth._isRefreshing = false;
+                // send original request
+                return $auth.$http(originalRequest)
+              })
+              .catch(error => {
+                // Refreshing fails :(
+                $auth._isRefreshing = false;
+                return Promise.reject(error)
+              })
+          }catch (e){
+            console.log("Shouldn't be here!");
+            console.log(e);
+            $auth._isRefreshing = false;
+            return Promise.reject(error)
+
+          }
         }
       }
       return Promise.reject(error)
@@ -1613,6 +1621,22 @@ class VueAuthenticate {
   }
 
   /**
+   * Get the logged in provider
+   * @return {String} provider
+   */
+  getLoggedInProvider() {
+    return this.storage.getItem('LoggedInProvider');
+  }
+
+  /**
+   * Set logged in provider
+   * @param {String} provider
+   */
+  setLoggedInProvider(provider) {
+      this.storage.setItem('LoggedInProvider', token);
+  }
+
+  /**
    * Get expiration of the access token
    * @returns {number|null} expiration
    */
@@ -1782,40 +1806,40 @@ class VueAuthenticate {
    * @param requestOptions  Request options
    * @returns {Promise}     Request Promise
    */
-  refresh(provider) {
-    return new Promise$1((resolve, reject) => {
-      var providerConfig = this.options.providers[provider];
-      if (!providerConfig) {
-        return reject(new Error('Unknown provider'));
-      }
+  refresh() {
+    const provider = this.getLoggedInProvider();
+    const providerConfig = this.options.providers[provider];
+    const refreshTokenName = this.refreshTokenName;
 
-      let providerInstance;
-      switch (providerConfig.oauthType) {
-        case '2.0':
-          providerInstance = new OAuth2(
-            this.$http,
-            this.storage,
-            providerConfig,
-            this.options
-          );
-          break;
-        default:
-          return reject(new Error('Invalid OAuth type for refresh'));
-      }
+    if (!providerConfig) {
+      return reject(new Error('Unknown provider'));
+    }
 
-      return providerInstance
-        .refresh(this.refreshTokenName)
-        .then((response) => {
-          this.setToken(response);
-          this.setRefreshToken(response);
-          return Promise$1.resolve(response);
-        })
-        .catch((error) => {
-          this.clearStorage();
-          return Promise$1.reject(error);
-        })
-        .catch(err => reject(err));
-    });
+    let providerInstance;
+    switch (providerConfig.oauthType) {
+      case '2.0':
+        providerInstance = new OAuth2(
+          this.$http,
+          this.storage,
+          providerConfig,
+          this.options
+        );
+        break;
+      default:
+        return reject(new Error('Invalid OAuth type for refresh'));
+    }
+
+    return providerInstance
+      .refresh(refreshTokenName)
+      .then((response) => {
+        this.setToken(response);
+        this.setRefreshToken(response);
+        return response;
+      })
+      .catch((error) => {
+        this.clearStorage();
+        throw error;
+      })
   }
 
   /**
@@ -1868,6 +1892,7 @@ class VueAuthenticate {
         .then(response => {
           this.setToken(response, providerConfig.tokenPath);
           this.setRefreshToken(response, providerConfig.refreshTokenPath);
+          this.setLoggedInProvider(provider);
 
           if (this.isAuthenticated()) {
             return resolve(response);

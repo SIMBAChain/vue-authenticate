@@ -155,6 +155,22 @@ export default class VueAuthenticate {
   }
 
   /**
+   * Get the logged in provider
+   * @return {String} provider
+   */
+  getLoggedInProvider() {
+    return this.storage.getItem('LoggedInProvider');
+  }
+
+  /**
+   * Set logged in provider
+   * @param {String} provider
+   */
+  setLoggedInProvider(provider) {
+      this.storage.setItem('LoggedInProvider', token);
+  }
+
+  /**
    * Get expiration of the access token
    * @returns {number|null} expiration
    */
@@ -324,40 +340,40 @@ export default class VueAuthenticate {
    * @param requestOptions  Request options
    * @returns {Promise}     Request Promise
    */
-  refresh(provider) {
-    return new Promise((resolve, reject) => {
-      var providerConfig = this.options.providers[provider];
-      if (!providerConfig) {
-        return reject(new Error('Unknown provider'));
-      }
+  refresh() {
+    const provider = this.getLoggedInProvider();
+    const providerConfig = this.options.providers[provider];
+    const refreshTokenName = this.refreshTokenName;
 
-      let providerInstance;
-      switch (providerConfig.oauthType) {
-        case '2.0':
-          providerInstance = new OAuth2(
-            this.$http,
-            this.storage,
-            providerConfig,
-            this.options
-          );
-          break;
-        default:
-          return reject(new Error('Invalid OAuth type for refresh'));
-      }
+    if (!providerConfig) {
+      return reject(new Error('Unknown provider'));
+    }
 
-      return providerInstance
-        .refresh(this.refreshTokenName)
-        .then((response) => {
-          this.setToken(response);
-          this.setRefreshToken(response);
-          return Promise.resolve(response);
-        })
-        .catch((error) => {
-          this.clearStorage();
-          return Promise.reject(error);
-        })
-        .catch(err => reject(err));
-    });
+    let providerInstance;
+    switch (providerConfig.oauthType) {
+      case '2.0':
+        providerInstance = new OAuth2(
+          this.$http,
+          this.storage,
+          providerConfig,
+          this.options
+        );
+        break;
+      default:
+        return reject(new Error('Invalid OAuth type for refresh'));
+    }
+
+    return providerInstance
+      .refresh(refreshTokenName)
+      .then((response) => {
+        this.setToken(response);
+        this.setRefreshToken(response);
+        return response;
+      })
+      .catch((error) => {
+        this.clearStorage();
+        throw error;
+      })
   }
 
   /**
@@ -410,6 +426,7 @@ export default class VueAuthenticate {
         .then(response => {
           this.setToken(response, providerConfig.tokenPath);
           this.setRefreshToken(response, providerConfig.refreshTokenPath)
+          this.setLoggedInProvider(provider);
 
           if (this.isAuthenticated()) {
             return resolve(response);
