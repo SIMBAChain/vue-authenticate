@@ -1,5 +1,5 @@
 /**
- * vue-authenticate v1.5.0
+ * vue-authenticate v1.5.2
  * https://github.com/dgrubelic/vue-authenticate
  * Released under the MIT License.
  * 
@@ -1637,7 +1637,7 @@ class VueAuthenticate {
    * @param {String} provider
    */
   setLoggedInProvider(provider) {
-      this.storage.setItem('LoggedInProvider', token);
+      this.storage.setItem('LoggedInProvider', provider);
   }
 
   /**

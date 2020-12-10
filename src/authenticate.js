@@ -167,7 +167,7 @@ export default class VueAuthenticate {
    * @param {String} provider
    */
   setLoggedInProvider(provider) {
-      this.storage.setItem('LoggedInProvider', token);
+      this.storage.setItem('LoggedInProvider', provider);
   }
 
   /**

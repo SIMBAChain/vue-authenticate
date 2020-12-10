@@ -35,6 +35,15 @@ export interface ProviderOptions {
     clientId?: string;
     redirectUri?: string;
   };
+  tokenRequestAsForm: boolean,
+  refreshRequestAsForm: boolean,
+  refreshGrantType?: string,
+  pkce: boolean,
+  refreshParams?: {
+    clientId?: string;
+    grantType?: string;
+    scope?: string;
+  };
   popupOptions?: {
     width: number;
     height: number;
@@ -48,12 +57,17 @@ export declare class VueAuthenticate {
   ): Promise<AxiosResponse>;
   isAuthenticated(): boolean;
   getToken(): string;
+  getLoggedInProvider(): string;
   setToken(token: string | object): void;
+  setLoggedInProvider(provider: string | object): void;
+  setRefreshToken(response: string|object, tokenPath: string|null): string|object;
+  setExpiration(response: string|object): string|object;
   register(
     user: any,
     requestOptions?: AxiosRequestConfig
   ): Promise<AxiosResponse>;
   logout(requestOptions?: AxiosRequestConfig): Promise<AxiosResponse>;
+  refresh(): Promise<AxiosResponse>;
   authenticate(
     provider: string,
     userData: any,
@@ -76,6 +90,10 @@ export interface AuthenticateOptions {
   responseDataKey?: string;
   withCredentials?: boolean;
   providers: { [key: string]: ProviderOptions };
+  refreshType?: string,
+  refreshTokenName?: string,
+  refreshTokenPrefix?: string,
+  pkce: boolean,
 }
 
 declare module "vue/types/vue" {
