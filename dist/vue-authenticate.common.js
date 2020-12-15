@@ -1,5 +1,5 @@
 /**
- * vue-authenticate v1.5.2
+ * vue-authenticate v1.5.3
  * https://github.com/dgrubelic/vue-authenticate
  * Released under the MIT License.
  * 
@@ -7,11 +7,15 @@
 
 'use strict';
 
-function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+var sha256 = require('crypto-js/sha256');
+var Base64 = require('crypto-js/enc-base64');
+var WordArray = require('crypto-js/lib-typedarrays');
 
-var sha256 = _interopDefault(require('crypto-js/sha256'));
-var Base64 = _interopDefault(require('crypto-js/enc-base64'));
-var WordArray = _interopDefault(require('crypto-js/lib-typedarrays'));
+function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
+
+var sha256__default = /*#__PURE__*/_interopDefaultLegacy(sha256);
+var Base64__default = /*#__PURE__*/_interopDefaultLegacy(Base64);
+var WordArray__default = /*#__PURE__*/_interopDefaultLegacy(WordArray);
 
 if (typeof Object.assign != 'function') {
   Object.assign = function (target, varArgs) {
@@ -606,14 +610,6 @@ var defaultOptions = {
   tokenPrefix: 'vueauth',
   tokenHeader: 'Authorization',
   tokenType: 'Bearer',
-  // There are three types of refresh tokens,
-  // 1. (httponly): refresh token is set via HttpOnly Cookie which is the safest method
-  // 2. (storage): refresh token is safe in the local storage, which is as safe as just send a long life access_token
-  // 3. (null): refresh token is not use
-  refreshType: null,
-  refreshTokenName: 'refresh_token',
-  refreshTokenPrefix: null,
-  pkce: false,
   expirationName: 'expiration',
   expirationPrefix: null,
   loginUrl: '/auth/login',
@@ -1218,9 +1214,15 @@ const defaultProviderConfig$1 = {
   requiredUrlParams: null,
   defaultUrlParams: ['response_type', 'client_id', 'redirect_uri'],
   responseType: 'code',
+  responseGrantType: 'authorization_code',
+  refreshGrantType: "refresh_token",  // There are three types of refresh tokens,
+  // 1. (httponly): refresh token is set via HttpOnly Cookie which is the safest method
+  // 2. (storage): refresh token is safe in the local storage, which is as safe as just send a long life access_token
+  // 3. (null): refresh token is not use
+  refreshType: null,
+  refreshTokenPrefix: null,
   tokenRequestAsForm: false,
   refreshRequestAsForm: false,
-  refreshGrantType: null,
   pkce: false,
   responseParams: {
     code: 'code',
@@ -1245,9 +1247,9 @@ class OAuth2 {
     this.options = options;
   }
 
-  getRandomString(key) {
+  generateRandomForKey(key) {
     if(!this.storage.getItem(key)) {
-      this.storage.setItem(key, WordArray.random(64));
+      this.storage.setItem(key, WordArray__default['default'].random(64));
     }
 
     console.log(this.storage.getItem(key));
@@ -1272,8 +1274,8 @@ class OAuth2 {
       if(this.providerConfig.responseType !== 'code'){
         throw new Error(`Cannot use PKCE with response type ${this.providerConfig.responseType}`);
       }
-      const hashed = sha256(this.getRandomString(this.providerConfig.name + '_pkce'));
-      var pkce_challenge = Base64.stringify(hashed).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const hashed = sha256__default['default'](this.generateRandomForKey(this.providerConfig.name + '_pkce'));
+      var pkce_challenge = Base64__default['default'].stringify(hashed).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
       url = `${url}&code_challenge=${encodeURIComponent(pkce_challenge)}&code_challenge_method=S256`;
     }
@@ -1342,6 +1344,9 @@ class OAuth2 {
         case 'redirectUri':
           payload[value] = this.providerConfig.redirectUri;
           break
+        case 'grantType':
+          payload[value] = this.providerConfig.responseGrantType;
+          break
         default:
           payload[value] = oauth[key];
       }
@@ -1358,11 +1363,13 @@ class OAuth2 {
       exchangeTokenUrl = this.providerConfig.url;
     }
 
-    let pkceVerifier = this.getRandomString(this.providerConfig.name + '_pkce');
-    if(pkceVerifier){
-      payload['code_verifier'] = pkceVerifier;
-      payload['grant_type'] = 'authorization_code';
-      console.log(pkceVerifier);
+    if(this.providerConfig.pkce){
+      let pkceVerifier = this.storage.getItem(this.providerConfig.name + '_pkce');
+      if(pkceVerifier){
+        payload['code_verifier'] = pkceVerifier;
+        payload['grant_type'] = 'authorization_code';
+        console.log(pkceVerifier);
+      }
     }
 
     if(this.providerConfig.tokenRequestAsForm){

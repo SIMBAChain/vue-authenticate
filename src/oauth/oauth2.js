@@ -29,9 +29,15 @@ const defaultProviderConfig = {
   requiredUrlParams: null,
   defaultUrlParams: ['response_type', 'client_id', 'redirect_uri'],
   responseType: 'code',
+  responseGrantType: 'authorization_code',
+  refreshGrantType: "refresh_token",  // There are three types of refresh tokens,
+  // 1. (httponly): refresh token is set via HttpOnly Cookie which is the safest method
+  // 2. (storage): refresh token is safe in the local storage, which is as safe as just send a long life access_token
+  // 3. (null): refresh token is not use
+  refreshType: null,
+  refreshTokenPrefix: null,
   tokenRequestAsForm: false,
   refreshRequestAsForm: false,
-  refreshGrantType: null,
   pkce: false,
   responseParams: {
     code: 'code',
@@ -56,7 +62,7 @@ export default class OAuth2 {
     this.options = options;
   }
 
-  getRandomString(key) {
+  generateRandomForKey(key) {
     if(!this.storage.getItem(key)) {
       this.storage.setItem(key, WordArray.random(64));
     }
@@ -83,7 +89,7 @@ export default class OAuth2 {
       if(this.providerConfig.responseType !== 'code'){
         throw new Error(`Cannot use PKCE with response type ${this.providerConfig.responseType}`);
       }
-      const hashed = sha256(this.getRandomString(this.providerConfig.name + '_pkce'));
+      const hashed = sha256(this.generateRandomForKey(this.providerConfig.name + '_pkce'));
       var pkce_challenge = Base64.stringify(hashed).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
       url = `${url}&code_challenge=${encodeURIComponent(pkce_challenge)}&code_challenge_method=S256`
@@ -153,6 +159,9 @@ export default class OAuth2 {
         case 'redirectUri':
           payload[value] = this.providerConfig.redirectUri
           break
+        case 'grantType':
+          payload[value] = this.providerConfig.responseGrantType
+          break
         default:
           payload[value] = oauth[key]
       }
@@ -169,11 +178,13 @@ export default class OAuth2 {
       exchangeTokenUrl = this.providerConfig.url;
     }
 
-    let pkceVerifier = this.getRandomString(this.providerConfig.name + '_pkce');
-    if(pkceVerifier){
-      payload['code_verifier'] = pkceVerifier;
-      payload['grant_type'] = 'authorization_code';
-      console.log(pkceVerifier);
+    if(this.providerConfig.pkce){
+      let pkceVerifier = this.storage.getItem(this.providerConfig.name + '_pkce');
+      if(pkceVerifier){
+        payload['code_verifier'] = pkceVerifier;
+        payload['grant_type'] = 'authorization_code';
+        console.log(pkceVerifier);
+      }
     }
 
     if(this.providerConfig.tokenRequestAsForm){
