@@ -1,5 +1,5 @@
 /**
- * vue-authenticate v1.5.4
+ * vue-authenticate v1.5.5
  * https://github.com/dgrubelic/vue-authenticate
  * Released under the MIT License.
  * 
@@ -318,7 +318,7 @@ function bind(fn, thisArg) {
   };
 }
 
-function Promise$1(fn) {
+function Promise(fn) {
   if (typeof this !== 'object')
     throw new TypeError('Promises must be constructed via new');
   if (typeof fn !== 'function') throw new TypeError('not a function');
@@ -339,7 +339,7 @@ function handle(self, deferred) {
     return;
   }
   self._handled = true;
-  Promise$1._immediateFn(function () {
+  Promise._immediateFn(function () {
     var cb = self._state === 1 ? deferred.onFulfilled : deferred.onRejected;
     if (cb === null) {
       (self._state === 1 ? resolve : reject$1)(deferred.promise, self._value);
@@ -366,7 +366,7 @@ function resolve(self, newValue) {
       (typeof newValue === 'object' || typeof newValue === 'function')
     ) {
       var then = newValue.then;
-      if (newValue instanceof Promise$1) {
+      if (newValue instanceof Promise) {
         self._state = 3;
         self._value = newValue;
         finale(self);
@@ -392,9 +392,9 @@ function reject$1(self, newValue) {
 
 function finale(self) {
   if (self._state === 2 && self._deferreds.length === 0) {
-    Promise$1._immediateFn(function () {
+    Promise._immediateFn(function () {
       if (!self._handled) {
-        Promise$1._unhandledRejectionFn(self._value);
+        Promise._unhandledRejectionFn(self._value);
       }
     });
   }
@@ -439,21 +439,21 @@ function doResolve(fn, self) {
   }
 }
 
-Promise$1.prototype['catch'] = function (onRejected) {
+Promise.prototype['catch'] = function (onRejected) {
   return this.then(null, onRejected);
 };
 
-Promise$1.prototype.then = function (onFulfilled, onRejected) {
+Promise.prototype.then = function (onFulfilled, onRejected) {
   var prom = new this.constructor(noop);
 
   handle(this, new Handler(onFulfilled, onRejected, prom));
   return prom;
 };
 
-Promise$1.all = function (arr) {
+Promise.all = function (arr) {
   var args = Array.prototype.slice.call(arr);
 
-  return new Promise$1(function (resolve, reject) {
+  return new Promise(function (resolve, reject) {
     if (args.length === 0) return resolve([]);
     var remaining = args.length;
 
@@ -487,24 +487,24 @@ Promise$1.all = function (arr) {
   });
 };
 
-Promise$1.resolve = function (value) {
-  if (value && typeof value === 'object' && value.constructor === Promise$1) {
+Promise.resolve = function (value) {
+  if (value && typeof value === 'object' && value.constructor === Promise) {
     return value;
   }
 
-  return new Promise$1(function (resolve) {
+  return new Promise(function (resolve) {
     resolve(value);
   });
 };
 
-Promise$1.reject = function (value) {
-  return new Promise$1(function (resolve, reject) {
+Promise.reject = function (value) {
+  return new Promise(function (resolve, reject) {
     reject(value);
   });
 };
 
-Promise$1.race = function (values) {
-  return new Promise$1(function (resolve, reject) {
+Promise.race = function (values) {
+  return new Promise(function (resolve, reject) {
     for (var i = 0, len = values.length; i < len; i++) {
       values[i].then(resolve, reject);
     }
@@ -512,7 +512,7 @@ Promise$1.race = function (values) {
 };
 
 // Use polyfill for setImmediate for performance gains
-Promise$1._immediateFn =
+Promise._immediateFn =
   (typeof setImmediate === 'function' &&
     function (fn) {
       setImmediate(fn);
@@ -521,7 +521,7 @@ Promise$1._immediateFn =
     setTimeoutFunc(fn, 0);
   };
 
-Promise$1._unhandledRejectionFn = function _unhandledRejectionFn(err) {
+Promise._unhandledRejectionFn = function _unhandledRejectionFn(err) {
   if (typeof console !== 'undefined' && console) {
     console.warn('Possible Unhandled Promise Rejection:', err); // eslint-disable-line no-console
   }
@@ -532,8 +532,8 @@ Promise$1._unhandledRejectionFn = function _unhandledRejectionFn(err) {
  * @param fn {function} Function to execute
  * @deprecated
  */
-Promise$1._setImmediateFn = function _setImmediateFn(fn) {
-  Promise$1._immediateFn = fn;
+Promise._setImmediateFn = function _setImmediateFn(fn) {
+  Promise._immediateFn = fn;
 };
 
 /**
@@ -541,8 +541,8 @@ Promise$1._setImmediateFn = function _setImmediateFn(fn) {
  * @param {function} fn Function to execute on unhandled rejection
  * @deprecated
  */
-Promise$1._setUnhandledRejectionFn = function _setUnhandledRejectionFn(fn) {
-  Promise$1._unhandledRejectionFn = fn;
+Promise._setUnhandledRejectionFn = function _setUnhandledRejectionFn(fn) {
+  Promise._unhandledRejectionFn = fn;
 };
 
 const fakeDocument = {
@@ -617,70 +617,16 @@ var defaultOptions = {
   },
   requestDataKey: 'data',
   responseDataKey: 'data',
+  last_token_refresh_attempt: null,
+
+  refreshAuthFailInterceptors: [],
 
   /**
    * Default request interceptor for Axios library
    * @context {VueAuthenticate}
    */
-  bindRequestInterceptor: function ($auth) {
-    const tokenHeader = $auth.options.tokenHeader;
-
-    $auth.$http.interceptors.request.use((request) => {
-      if ($auth.isAuthenticated()) {
-        request.headers[tokenHeader] = [
-          $auth.options.tokenType,
-          $auth.getToken(),
-        ].join(' ');
-      } else {
-        delete request.headers[tokenHeader];
-      }
-      return request;
-    });
-  },
-
-  bindResponseInterceptor: function ($auth) {
-    $auth.$http.interceptors.response.use((response) => {
-      return response
-    }, (error) => {
-      const {config, response: {status}} = error;
-      const originalRequest = config;
-
-      // Check if we should refresh the token
-      // 1. unauthorized
-      // 2. refreshType is set
-      // 3. any token is set
-      // if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
-      if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
-
-        // check if we are already refreshing, to prevent endless loop
-        if (!$auth._isRefreshing) {
-          $auth._isRefreshing = true;
-          // Try to refresh our token
-          try {
-            return $auth.refresh()
-              .then(response => {
-                // refreshing was successful :)
-                $auth._isRefreshing = false;
-                // send original request
-                return $auth.$http(originalRequest)
-              })
-              .catch(error => {
-                // Refreshing fails :(
-                $auth._isRefreshing = false;
-                return Promise.reject(error)
-              })
-          }catch (e){
-            console.log("Shouldn't be here!");
-            console.log(e);
-            $auth._isRefreshing = false;
-            return Promise.reject(error)
-
-          }
-        }
-      }
-      return Promise.reject(error)
-    });
-  },
+  bindRequestInterceptor: null,
+  bindResponseInterceptor: null,
 
   providers: {
     facebook: {
@@ -989,17 +935,17 @@ class OAuthPopup {
       }
 
       if (skipPooling) {
-        return Promise$1.resolve();
+        return Promise.resolve();
       } else {
         return this.pooling(redirectUri);
       }
     } catch (e) {
-      return Promise$1.reject(new Error('OAuth popup error occurred'));
+      return Promise.reject(new Error('OAuth popup error occurred'));
     }
   }
 
   pooling(redirectUri) {
-    return new Promise$1((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const redirectUriParser = $document.createElement('a');
       redirectUriParser.href = redirectUri;
       const redirectUriPath = getFullUrlPath(redirectUriParser);
@@ -1278,7 +1224,7 @@ class OAuth2 {
       this.providerConfig.popupOptions
     );
 
-    return new Promise$1((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       this.oauthPopup
         .open(this.providerConfig.redirectUri)
         .then(response => {
@@ -1543,20 +1489,25 @@ class VueAuthenticate {
     });
 
     // Setup request interceptors
-    if (
-      this.options.bindRequestInterceptor &&
-      isFunction(this.options.bindRequestInterceptor)
-    ) {
-      this.options.bindRequestInterceptor.call(this, this);
+    if (this.options.bindRequestInterceptor) {
+      if (isFunction(this.options.bindRequestInterceptor)){
+        this.options.bindRequestInterceptor.call(this, this);
+      }else {
+        throw new Error('Request interceptor must be functions');
+      }
     } else {
-      throw new Error('Request interceptor must be functions');
+      this.defaultBindRequestInterceptor.call(this, this);
     }
 
     // Setup response interceptors
-    if (this.options.bindResponseInterceptor && isFunction(this.options.bindResponseInterceptor)) {
-      this.options.bindResponseInterceptor.call(this, this);
+    if (this.options.bindResponseInterceptor) {
+      if(isFunction(this.options.bindResponseInterceptor)){
+        this.options.bindResponseInterceptor.call(this, this);
+      }else {
+        throw new Error('Response interceptor must be functions')
+      }
     } else {
-      throw new Error('Response interceptor must be functions')
+      this.defaultBindResponseInterceptor.call(this, this);
     }
   }
 
@@ -1741,12 +1692,12 @@ class VueAuthenticate {
         this.setRefreshToken(response);
         // Check if we are authenticated
         if(this.isAuthenticated()){
-          return Promise$1.resolve(response);
+          return Promise.resolve(response);
         }
         throw new Error('Server did not provided an access token.');
       })
       .catch(error => {
-        return Promise$1.reject(error)
+        return Promise.reject(error)
       })
   }
 
@@ -1763,9 +1714,9 @@ class VueAuthenticate {
       .then((response) => {
         this.setToken(response);
         this.setRefreshToken(response);
-        return Promise$1.resolve(response);
+        return Promise.resolve(response);
       })
-      .catch(err => Promise$1.reject(err))
+      .catch(err => Promise.reject(err))
   }
 
   /**
@@ -1775,7 +1726,7 @@ class VueAuthenticate {
    */
   logout(requestOptions) {
     if (!this.isAuthenticated()) {
-      return Promise$1.reject(
+      return Promise.reject(
         new Error('There is no currently authenticated user')
       );
     }
@@ -1795,12 +1746,12 @@ class VueAuthenticate {
       return this.$http(requestOptions)
         .then((response) => {
           this.storage.removeItem(this.tokenName);
-          return Promise$1.resolve(response);
+          return Promise.resolve(response);
         })
-        .catch(err => Promise$1.reject(err))
+        .catch(err => Promise.reject(err))
     } else {
       this.storage.removeItem(this.tokenName);
-      return Promise$1.resolve();
+      return Promise.resolve();
     }
   }
 
@@ -1862,7 +1813,7 @@ class VueAuthenticate {
    * @return {Promise}               Request promise
    */
   authenticate(provider, userData) {
-    return new Promise$1((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       var providerConfig = this.options.providers[provider];
       if (!providerConfig) {
         return reject(new Error('Unknown provider'));
@@ -1915,7 +1866,7 @@ class VueAuthenticate {
    * @return {Promise}               Request promise
    */
   link(provider, userData) {
-    return new Promise$1((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       var providerConfig = this.options.providers[provider];
       if (!providerConfig) {
         return reject(new Error('Unknown provider'));
@@ -1955,6 +1906,101 @@ class VueAuthenticate {
         .catch(reject);
     });
   }
+
+  /**
+   * Default request interceptor for Axios library
+   * @context {VueAuthenticate}
+   */
+  defaultBindRequestInterceptor($auth) {
+    const tokenHeader = $auth.options.tokenHeader;
+
+    $auth.$http.interceptors.request.use((request) => {
+      if ($auth.isAuthenticated()) {
+        request.headers[tokenHeader] = [
+          $auth.options.tokenType,
+          $auth.getToken(),
+        ].join(' ');
+      } else {
+        delete request.headers[tokenHeader];
+      }
+      return request;
+    });
+  }
+
+  runAuthInterceptor(error) {
+    var chain = [];
+    var promise = Promise.reject(error);
+
+    this.options.refreshAuthFailInterceptors.forEach((interceptor)=>{
+      chain.unshift(interceptor);
+    });
+
+    while (chain.length) {
+      promise = promise.catch(chain.shift());
+    }
+
+    return promise;
+  }
+
+  defaultBindResponseInterceptor = ($auth) => {
+    $auth.$http.interceptors.response.use((response) => {
+      return response
+    }, (error) => {
+      const {config, response: {status}} = error;
+      const originalRequest = config;
+
+      // Check if we should refresh the token
+      // 1. unauthorized
+      // 2. refreshType is set
+      // 3. any token is set
+      // if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
+      if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
+
+        // check if we are already refreshing, to prevent endless loop
+        if (!$auth._isRefreshing) {
+          if($auth.last_token_refresh_attempt &&
+            ((new Date) - $auth.last_token_refresh_attempt) < 5*60*100){ //check we haven't tried to refresh in the last 5 minutes
+            // Don't retry a refresh on fail
+            return $auth.runAuthInterceptor(error);
+          }
+          $auth._isRefreshing = true;
+          $auth.last_token_refresh_attempt = new Date();
+          // Try to refresh our token
+          try {
+            return $auth.refresh()
+              .then(response => {
+                // refreshing was successful :)
+                $auth._isRefreshing = false;
+                // send original request
+                return $auth.$http(originalRequest)
+              })
+              .catch(error => {
+                // Refreshing fails :(
+                $auth._isRefreshing = false;
+                // return Promise.reject(error)
+                return $auth.runAuthInterceptor(error)
+              })
+          }catch (e){
+            console.log("Shouldn't be here!");
+            console.log(e);
+            $auth._isRefreshing = false;
+            // return Promise.reject(error)
+            return $auth.runAuthInterceptor(error)
+
+          }
+        }else {
+          // If refresh is already going, our request will run after it, e.g. when refreshed
+          return new Promise((resolve, reject) =>{
+            setTimeout(()=>{
+              $auth.$http(originalRequest).then(resolve).catch(reject);
+            }, 100);
+          });
+        }
+      }
+      return Promise.reject(error)
+    });
+  }
+
 }
 
 /**

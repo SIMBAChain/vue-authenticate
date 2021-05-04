@@ -45,70 +45,16 @@ export default {
   },
   requestDataKey: 'data',
   responseDataKey: 'data',
+  last_token_refresh_attempt: null,
+
+  refreshAuthFailInterceptors: [],
 
   /**
    * Default request interceptor for Axios library
    * @context {VueAuthenticate}
    */
-  bindRequestInterceptor: function ($auth) {
-    const tokenHeader = $auth.options.tokenHeader;
-
-    $auth.$http.interceptors.request.use((request) => {
-      if ($auth.isAuthenticated()) {
-        request.headers[tokenHeader] = [
-          $auth.options.tokenType,
-          $auth.getToken(),
-        ].join(' ');
-      } else {
-        delete request.headers[tokenHeader];
-      }
-      return request;
-    });
-  },
-
-  bindResponseInterceptor: function ($auth) {
-    $auth.$http.interceptors.response.use((response) => {
-      return response
-    }, (error) => {
-      const {config, response: {status}} = error
-      const originalRequest = config
-
-      // Check if we should refresh the token
-      // 1. unauthorized
-      // 2. refreshType is set
-      // 3. any token is set
-      // if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
-      if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
-
-        // check if we are already refreshing, to prevent endless loop
-        if (!$auth._isRefreshing) {
-          $auth._isRefreshing = true
-          // Try to refresh our token
-          try {
-            return $auth.refresh()
-              .then(response => {
-                // refreshing was successful :)
-                $auth._isRefreshing = false
-                // send original request
-                return $auth.$http(originalRequest)
-              })
-              .catch(error => {
-                // Refreshing fails :(
-                $auth._isRefreshing = false
-                return Promise.reject(error)
-              })
-          }catch (e){
-            console.log("Shouldn't be here!");
-            console.log(e);
-            $auth._isRefreshing = false
-            return Promise.reject(error)
-
-          }
-        }
-      }
-      return Promise.reject(error)
-    });
-  },
+  bindRequestInterceptor: null,
+  bindResponseInterceptor: null,
 
   providers: {
     facebook: {

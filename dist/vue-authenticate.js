@@ -332,7 +332,7 @@
     };
   }
 
-  function Promise$1(fn) {
+  function Promise(fn) {
     if (typeof this !== 'object')
       { throw new TypeError('Promises must be constructed via new'); }
     if (typeof fn !== 'function') { throw new TypeError('not a function'); }
@@ -353,7 +353,7 @@
       return;
     }
     self._handled = true;
-    Promise$1._immediateFn(function () {
+    Promise._immediateFn(function () {
       var cb = self._state === 1 ? deferred.onFulfilled : deferred.onRejected;
       if (cb === null) {
         (self._state === 1 ? resolve : reject$1)(deferred.promise, self._value);
@@ -380,7 +380,7 @@
         (typeof newValue === 'object' || typeof newValue === 'function')
       ) {
         var then = newValue.then;
-        if (newValue instanceof Promise$1) {
+        if (newValue instanceof Promise) {
           self._state = 3;
           self._value = newValue;
           finale(self);
@@ -406,9 +406,9 @@
 
   function finale(self) {
     if (self._state === 2 && self._deferreds.length === 0) {
-      Promise$1._immediateFn(function () {
+      Promise._immediateFn(function () {
         if (!self._handled) {
-          Promise$1._unhandledRejectionFn(self._value);
+          Promise._unhandledRejectionFn(self._value);
         }
       });
     }
@@ -453,21 +453,21 @@
     }
   }
 
-  Promise$1.prototype['catch'] = function (onRejected) {
+  Promise.prototype['catch'] = function (onRejected) {
     return this.then(null, onRejected);
   };
 
-  Promise$1.prototype.then = function (onFulfilled, onRejected) {
+  Promise.prototype.then = function (onFulfilled, onRejected) {
     var prom = new this.constructor(noop);
 
     handle(this, new Handler(onFulfilled, onRejected, prom));
     return prom;
   };
 
-  Promise$1.all = function (arr) {
+  Promise.all = function (arr) {
     var args = Array.prototype.slice.call(arr);
 
-    return new Promise$1(function (resolve, reject) {
+    return new Promise(function (resolve, reject) {
       if (args.length === 0) { return resolve([]); }
       var remaining = args.length;
 
@@ -501,24 +501,24 @@
     });
   };
 
-  Promise$1.resolve = function (value) {
-    if (value && typeof value === 'object' && value.constructor === Promise$1) {
+  Promise.resolve = function (value) {
+    if (value && typeof value === 'object' && value.constructor === Promise) {
       return value;
     }
 
-    return new Promise$1(function (resolve) {
+    return new Promise(function (resolve) {
       resolve(value);
     });
   };
 
-  Promise$1.reject = function (value) {
-    return new Promise$1(function (resolve, reject) {
+  Promise.reject = function (value) {
+    return new Promise(function (resolve, reject) {
       reject(value);
     });
   };
 
-  Promise$1.race = function (values) {
-    return new Promise$1(function (resolve, reject) {
+  Promise.race = function (values) {
+    return new Promise(function (resolve, reject) {
       for (var i = 0, len = values.length; i < len; i++) {
         values[i].then(resolve, reject);
       }
@@ -526,7 +526,7 @@
   };
 
   // Use polyfill for setImmediate for performance gains
-  Promise$1._immediateFn =
+  Promise._immediateFn =
     (typeof setImmediate === 'function' &&
       function (fn) {
         setImmediate(fn);
@@ -535,7 +535,7 @@
       setTimeoutFunc(fn, 0);
     };
 
-  Promise$1._unhandledRejectionFn = function _unhandledRejectionFn(err) {
+  Promise._unhandledRejectionFn = function _unhandledRejectionFn(err) {
     if (typeof console !== 'undefined' && console) {
       console.warn('Possible Unhandled Promise Rejection:', err); // eslint-disable-line no-console
     }
@@ -546,8 +546,8 @@
    * @param fn {function} Function to execute
    * @deprecated
    */
-  Promise$1._setImmediateFn = function _setImmediateFn(fn) {
-    Promise$1._immediateFn = fn;
+  Promise._setImmediateFn = function _setImmediateFn(fn) {
+    Promise._immediateFn = fn;
   };
 
   /**
@@ -555,8 +555,8 @@
    * @param {function} fn Function to execute on unhandled rejection
    * @deprecated
    */
-  Promise$1._setUnhandledRejectionFn = function _setUnhandledRejectionFn(fn) {
-    Promise$1._unhandledRejectionFn = fn;
+  Promise._setUnhandledRejectionFn = function _setUnhandledRejectionFn(fn) {
+    Promise._unhandledRejectionFn = fn;
   };
 
   var fakeDocument = {
@@ -631,70 +631,16 @@
     },
     requestDataKey: 'data',
     responseDataKey: 'data',
+    last_token_refresh_attempt: null,
+
+    refreshAuthFailInterceptors: [],
 
     /**
      * Default request interceptor for Axios library
      * @context {VueAuthenticate}
      */
-    bindRequestInterceptor: function ($auth) {
-      var tokenHeader = $auth.options.tokenHeader;
-
-      $auth.$http.interceptors.request.use(function (request) {
-        if ($auth.isAuthenticated()) {
-          request.headers[tokenHeader] = [
-            $auth.options.tokenType,
-            $auth.getToken() ].join(' ');
-        } else {
-          delete request.headers[tokenHeader];
-        }
-        return request;
-      });
-    },
-
-    bindResponseInterceptor: function ($auth) {
-      $auth.$http.interceptors.response.use(function (response) {
-        return response
-      }, function (error) {
-        var config = error.config;
-        var status = error.response.status;
-        var originalRequest = config;
-
-        // Check if we should refresh the token
-        // 1. unauthorized
-        // 2. refreshType is set
-        // 3. any token is set
-        // if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
-        if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
-
-          // check if we are already refreshing, to prevent endless loop
-          if (!$auth._isRefreshing) {
-            $auth._isRefreshing = true;
-            // Try to refresh our token
-            try {
-              return $auth.refresh()
-                .then(function (response) {
-                  // refreshing was successful :)
-                  $auth._isRefreshing = false;
-                  // send original request
-                  return $auth.$http(originalRequest)
-                })
-                .catch(function (error) {
-                  // Refreshing fails :(
-                  $auth._isRefreshing = false;
-                  return Promise.reject(error)
-                })
-            }catch (e){
-              console.log("Shouldn't be here!");
-              console.log(e);
-              $auth._isRefreshing = false;
-              return Promise.reject(error)
-
-            }
-          }
-        }
-        return Promise.reject(error)
-      });
-    },
+    bindRequestInterceptor: null,
+    bindResponseInterceptor: null,
 
     providers: {
       facebook: {
@@ -994,19 +940,19 @@
       }
 
       if (skipPooling) {
-        return Promise$1.resolve();
+        return Promise.resolve();
       } else {
         return this.pooling(redirectUri);
       }
     } catch (e) {
-      return Promise$1.reject(new Error('OAuth popup error occurred'));
+      return Promise.reject(new Error('OAuth popup error occurred'));
     }
   };
 
   OAuthPopup.prototype.pooling = function pooling (redirectUri) {
       var this$1 = this;
 
-    return new Promise$1(function (resolve, reject) {
+    return new Promise(function (resolve, reject) {
       var redirectUriParser = $document.createElement('a');
       redirectUriParser.href = redirectUri;
       var redirectUriPath = getFullUrlPath(redirectUriParser);
@@ -1283,7 +1229,7 @@
       this.providerConfig.popupOptions
     );
 
-    return new Promise$1(function (resolve, reject) {
+    return new Promise(function (resolve, reject) {
       this$1.oauthPopup
         .open(this$1.providerConfig.redirectUri)
         .then(function (response) {
@@ -1547,20 +1493,25 @@
     });
 
     // Setup request interceptors
-    if (
-      this.options.bindRequestInterceptor &&
-      isFunction(this.options.bindRequestInterceptor)
-    ) {
-      this.options.bindRequestInterceptor.call(this, this);
+    if (this.options.bindRequestInterceptor) {
+      if (isFunction(this.options.bindRequestInterceptor)){
+        this.options.bindRequestInterceptor.call(this, this);
+      }else {
+        throw new Error('Request interceptor must be functions');
+      }
     } else {
-      throw new Error('Request interceptor must be functions');
+      this.defaultBindRequestInterceptor.call(this, this);
     }
 
     // Setup response interceptors
-    if (this.options.bindResponseInterceptor && isFunction(this.options.bindResponseInterceptor)) {
-      this.options.bindResponseInterceptor.call(this, this);
+    if (this.options.bindResponseInterceptor) {
+      if(isFunction(this.options.bindResponseInterceptor)){
+        this.options.bindResponseInterceptor.call(this, this);
+      }else {
+        throw new Error('Response interceptor must be functions')
+      }
     } else {
-      throw new Error('Response interceptor must be functions')
+      this.defaultBindResponseInterceptor.call(this, this);
     }
   };
 
@@ -1747,12 +1698,12 @@
         this$1.setRefreshToken(response);
         // Check if we are authenticated
         if(this$1.isAuthenticated()){
-          return Promise$1.resolve(response);
+          return Promise.resolve(response);
         }
         throw new Error('Server did not provided an access token.');
       })
       .catch(function (error) {
-        return Promise$1.reject(error)
+        return Promise.reject(error)
       })
   };
 
@@ -1771,9 +1722,9 @@
       .then(function (response) {
         this$1.setToken(response);
         this$1.setRefreshToken(response);
-        return Promise$1.resolve(response);
+        return Promise.resolve(response);
       })
-      .catch(function (err) { return Promise$1.reject(err); })
+      .catch(function (err) { return Promise.reject(err); })
   };
 
   /**
@@ -1785,7 +1736,7 @@
       var this$1 = this;
 
     if (!this.isAuthenticated()) {
-      return Promise$1.reject(
+      return Promise.reject(
         new Error('There is no currently authenticated user')
       );
     }
@@ -1805,12 +1756,12 @@
       return this.$http(requestOptions)
         .then(function (response) {
           this$1.storage.removeItem(this$1.tokenName);
-          return Promise$1.resolve(response);
+          return Promise.resolve(response);
         })
-        .catch(function (err) { return Promise$1.reject(err); })
+        .catch(function (err) { return Promise.reject(err); })
     } else {
       this.storage.removeItem(this.tokenName);
-      return Promise$1.resolve();
+      return Promise.resolve();
     }
   };
 
@@ -1876,7 +1827,7 @@
   VueAuthenticate.prototype.authenticate = function authenticate (provider, userData) {
       var this$1 = this;
 
-    return new Promise$1(function (resolve, reject) {
+    return new Promise(function (resolve, reject) {
       var providerConfig = this$1.options.providers[provider];
       if (!providerConfig) {
         return reject(new Error('Unknown provider'));
@@ -1931,7 +1882,7 @@
   VueAuthenticate.prototype.link = function link (provider, userData) {
       var this$1 = this;
 
-    return new Promise$1(function (resolve, reject) {
+    return new Promise(function (resolve, reject) {
       var providerConfig = this$1.options.providers[provider];
       if (!providerConfig) {
         return reject(new Error('Unknown provider'));
@@ -1969,6 +1920,102 @@
           resolve(response);
         })
         .catch(reject);
+    });
+  };
+
+  /**
+   * Default request interceptor for Axios library
+   * @context {VueAuthenticate}
+   */
+  VueAuthenticate.prototype.defaultBindRequestInterceptor = function defaultBindRequestInterceptor ($auth) {
+    var tokenHeader = $auth.options.tokenHeader;
+
+    $auth.$http.interceptors.request.use(function (request) {
+      if ($auth.isAuthenticated()) {
+        request.headers[tokenHeader] = [
+          $auth.options.tokenType,
+          $auth.getToken() ].join(' ');
+      } else {
+        delete request.headers[tokenHeader];
+      }
+      return request;
+    });
+  };
+
+  VueAuthenticate.prototype.runAuthInterceptor = function runAuthInterceptor (error) {
+    var chain = [];
+    var promise = Promise.resolve(error);
+
+    this.options.refreshAuthFailInterceptors.forEach(function (interceptor){
+      chain.unshift(interceptor.fulfilled, interceptor.rejected);
+    });
+
+    while (chain.length) {
+      promise = promise.then(chain.shift(), chain.shift());
+    }
+
+    return promise;
+  };
+
+  VueAuthenticate.prototype.defaultBindResponseInterceptor = function defaultBindResponseInterceptor ($auth) {
+      var this$1 = this;
+
+    $auth.$http.interceptors.response.use(function (response) {
+      return response
+    }, function (error) {
+      var config = error.config;
+        var status = error.response.status;
+      var originalRequest = config;
+
+      // Check if we should refresh the token
+      // 1. unauthorized
+      // 2. refreshType is set
+      // 3. any token is set
+      // if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
+      if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
+
+        // check if we are already refreshing, to prevent endless loop
+        if (!$auth._isRefreshing) {
+          if(this$1.last_token_refresh_attempt &&
+            ((new Date) - this$1.last_token_refresh_attempt) < 5*60*100){ //check we haven't tried to refresh in the last 5 minutes
+            // Don't retry a refresh on fail
+            return this$1.runAuthInterceptor(error);
+          }
+          $auth._isRefreshing = true;
+          this$1.last_token_refresh_attempt = new Date();
+          // Try to refresh our token
+          try {
+            return $auth.refresh()
+              .then(function (response) {
+                // refreshing was successful :)
+                $auth._isRefreshing = false;
+                // send original request
+                return $auth.$http(originalRequest)
+              })
+              .catch(function (error) {
+                // Refreshing fails :(
+                $auth._isRefreshing = false;
+                // return Promise.reject(error)
+                return this$1.runAuthInterceptor(error)
+              })
+          }catch (e){
+            console.log("Shouldn't be here!");
+            console.log(e);
+            $auth._isRefreshing = false;
+            // return Promise.reject(error)
+            return this$1.runAuthInterceptor(error)
+
+          }
+        }else {
+          // If refresh is already going, our request will run after it, e.g. when refreshed
+          return new Promise(function (resolve, reject) {
+            setTimeout(function (){
+              $auth.$http(originalRequest).then(resolve).catch(reject);
+            }, 100);
+          });
+        }
+      }
+      return Promise.reject(error)
     });
   };
 

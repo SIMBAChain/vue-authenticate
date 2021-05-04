@@ -1,10 +1,7 @@
-import Vue, {
-  ComponentOptions,
-  PluginFunction,
-  AsyncComponent,
+import {
   VueConstructor
 } from "vue";
-import { AxiosResponse, AxiosInstance, AxiosRequestConfig } from "axios";
+import { AxiosResponse, AxiosRequestConfig } from "axios";
 
 export default function plugin(Vue: VueConstructor, options?: any): void;
 
@@ -94,6 +91,7 @@ export interface AuthenticateOptions {
   refreshTokenName?: string,
   refreshTokenPrefix?: string,
   pkce: boolean,
+  refreshAuthFailInterceptors: Promise<any>[]
 }
 
 declare module "vue/types/vue" {
