@@ -81,7 +81,7 @@ export default class VueAuthenticate {
         throw new Error('Request interceptor must be functions');
       }
     } else {
-      this.defaultBindRequestInterceptor.call(this, this);
+      this.defaultBindRequestInterceptor(this, this);
     }
 
     // Setup response interceptors
@@ -92,7 +92,7 @@ export default class VueAuthenticate {
         throw new Error('Response interceptor must be functions')
       }
     } else {
-      this.defaultBindResponseInterceptor.call(this, this);
+      this.defaultBindResponseInterceptor(this, this);
     }
   }
 
