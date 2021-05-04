@@ -1,6 +1,6 @@
 {
   "name": "@simbachain/vue-authenticate",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "description": "Authentication library for Vue.js",
   "main": "dist/vue-authenticate.common.js",
   "module": "dist/vue-authenticate.esm.js",

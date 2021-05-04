@@ -527,7 +527,7 @@ export default class VueAuthenticate {
     return promise;
   }
 
-  defaultBindResponseInterceptor = ($auth) => {
+  defaultBindResponseInterceptor($auth) {
     $auth.$http.interceptors.response.use((response) => {
       return response
     }, (error) => {

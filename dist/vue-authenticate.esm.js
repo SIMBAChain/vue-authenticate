@@ -318,7 +318,7 @@ function bind(fn, thisArg) {
   };
 }
 
-function Promise(fn) {
+function Promise$1(fn) {
   if (typeof this !== 'object')
     throw new TypeError('Promises must be constructed via new');
   if (typeof fn !== 'function') throw new TypeError('not a function');
@@ -339,7 +339,7 @@ function handle(self, deferred) {
     return;
   }
   self._handled = true;
-  Promise._immediateFn(function () {
+  Promise$1._immediateFn(function () {
     var cb = self._state === 1 ? deferred.onFulfilled : deferred.onRejected;
     if (cb === null) {
       (self._state === 1 ? resolve : reject$1)(deferred.promise, self._value);
@@ -366,7 +366,7 @@ function resolve(self, newValue) {
       (typeof newValue === 'object' || typeof newValue === 'function')
     ) {
       var then = newValue.then;
-      if (newValue instanceof Promise) {
+      if (newValue instanceof Promise$1) {
         self._state = 3;
         self._value = newValue;
         finale(self);
@@ -392,9 +392,9 @@ function reject$1(self, newValue) {
 
 function finale(self) {
   if (self._state === 2 && self._deferreds.length === 0) {
-    Promise._immediateFn(function () {
+    Promise$1._immediateFn(function () {
       if (!self._handled) {
-        Promise._unhandledRejectionFn(self._value);
+        Promise$1._unhandledRejectionFn(self._value);
       }
     });
   }
@@ -439,21 +439,21 @@ function doResolve(fn, self) {
   }
 }
 
-Promise.prototype['catch'] = function (onRejected) {
+Promise$1.prototype['catch'] = function (onRejected) {
   return this.then(null, onRejected);
 };
 
-Promise.prototype.then = function (onFulfilled, onRejected) {
+Promise$1.prototype.then = function (onFulfilled, onRejected) {
   var prom = new this.constructor(noop);
 
   handle(this, new Handler(onFulfilled, onRejected, prom));
   return prom;
 };
 
-Promise.all = function (arr) {
+Promise$1.all = function (arr) {
   var args = Array.prototype.slice.call(arr);
 
-  return new Promise(function (resolve, reject) {
+  return new Promise$1(function (resolve, reject) {
     if (args.length === 0) return resolve([]);
     var remaining = args.length;
 
@@ -487,24 +487,24 @@ Promise.all = function (arr) {
   });
 };
 
-Promise.resolve = function (value) {
-  if (value && typeof value === 'object' && value.constructor === Promise) {
+Promise$1.resolve = function (value) {
+  if (value && typeof value === 'object' && value.constructor === Promise$1) {
     return value;
   }
 
-  return new Promise(function (resolve) {
+  return new Promise$1(function (resolve) {
     resolve(value);
   });
 };
 
-Promise.reject = function (value) {
-  return new Promise(function (resolve, reject) {
+Promise$1.reject = function (value) {
+  return new Promise$1(function (resolve, reject) {
     reject(value);
   });
 };
 
-Promise.race = function (values) {
-  return new Promise(function (resolve, reject) {
+Promise$1.race = function (values) {
+  return new Promise$1(function (resolve, reject) {
     for (var i = 0, len = values.length; i < len; i++) {
       values[i].then(resolve, reject);
     }
@@ -512,7 +512,7 @@ Promise.race = function (values) {
 };
 
 // Use polyfill for setImmediate for performance gains
-Promise._immediateFn =
+Promise$1._immediateFn =
   (typeof setImmediate === 'function' &&
     function (fn) {
       setImmediate(fn);
@@ -521,7 +521,7 @@ Promise._immediateFn =
     setTimeoutFunc(fn, 0);
   };
 
-Promise._unhandledRejectionFn = function _unhandledRejectionFn(err) {
+Promise$1._unhandledRejectionFn = function _unhandledRejectionFn(err) {
   if (typeof console !== 'undefined' && console) {
     console.warn('Possible Unhandled Promise Rejection:', err); // eslint-disable-line no-console
   }
@@ -532,8 +532,8 @@ Promise._unhandledRejectionFn = function _unhandledRejectionFn(err) {
  * @param fn {function} Function to execute
  * @deprecated
  */
-Promise._setImmediateFn = function _setImmediateFn(fn) {
-  Promise._immediateFn = fn;
+Promise$1._setImmediateFn = function _setImmediateFn(fn) {
+  Promise$1._immediateFn = fn;
 };
 
 /**
@@ -541,8 +541,8 @@ Promise._setImmediateFn = function _setImmediateFn(fn) {
  * @param {function} fn Function to execute on unhandled rejection
  * @deprecated
  */
-Promise._setUnhandledRejectionFn = function _setUnhandledRejectionFn(fn) {
-  Promise._unhandledRejectionFn = fn;
+Promise$1._setUnhandledRejectionFn = function _setUnhandledRejectionFn(fn) {
+  Promise$1._unhandledRejectionFn = fn;
 };
 
 const fakeDocument = {
@@ -935,17 +935,17 @@ class OAuthPopup {
       }
 
       if (skipPooling) {
-        return Promise.resolve();
+        return Promise$1.resolve();
       } else {
         return this.pooling(redirectUri);
       }
     } catch (e) {
-      return Promise.reject(new Error('OAuth popup error occurred'));
+      return Promise$1.reject(new Error('OAuth popup error occurred'));
     }
   }
 
   pooling(redirectUri) {
-    return new Promise((resolve, reject) => {
+    return new Promise$1((resolve, reject) => {
       const redirectUriParser = $document.createElement('a');
       redirectUriParser.href = redirectUri;
       const redirectUriPath = getFullUrlPath(redirectUriParser);
@@ -1010,7 +1010,7 @@ class OAuthPopup {
   }
 }
 
-const defaultProviderConfig = {
+const defaultProviderConfig$1 = {
   name: null,
   url: null,
   authorizationEndpoint: null,
@@ -1028,7 +1028,7 @@ class OAuth {
   constructor($http, storage, providerConfig, options) {
     this.$http = $http;
     this.storage = storage;
-    this.providerConfig = objectExtend({}, defaultProviderConfig);
+    this.providerConfig = objectExtend({}, defaultProviderConfig$1);
     this.providerConfig = objectExtend(this.providerConfig, providerConfig);
     this.options = options;
   }
@@ -1139,7 +1139,7 @@ class OAuth {
  * Default provider configuration
  * @type {Object}
  */
-const defaultProviderConfig$1 = {
+const defaultProviderConfig = {
   name: null,
   url: null,
   clientId: null,
@@ -1180,7 +1180,7 @@ class OAuth2 {
   constructor($http, storage, providerConfig, options) {
     this.$http = $http;
     this.storage = storage;
-    this.providerConfig = objectExtend({}, defaultProviderConfig$1);
+    this.providerConfig = objectExtend({}, defaultProviderConfig);
     this.providerConfig = objectExtend(this.providerConfig, providerConfig);
     this.options = options;
   }
@@ -1224,7 +1224,7 @@ class OAuth2 {
       this.providerConfig.popupOptions
     );
 
-    return new Promise((resolve, reject) => {
+    return new Promise$1((resolve, reject) => {
       this.oauthPopup
         .open(this.providerConfig.redirectUri)
         .then(response => {
@@ -1692,12 +1692,12 @@ class VueAuthenticate {
         this.setRefreshToken(response);
         // Check if we are authenticated
         if(this.isAuthenticated()){
-          return Promise.resolve(response);
+          return Promise$1.resolve(response);
         }
         throw new Error('Server did not provided an access token.');
       })
       .catch(error => {
-        return Promise.reject(error)
+        return Promise$1.reject(error)
       })
   }
 
@@ -1714,9 +1714,9 @@ class VueAuthenticate {
       .then((response) => {
         this.setToken(response);
         this.setRefreshToken(response);
-        return Promise.resolve(response);
+        return Promise$1.resolve(response);
       })
-      .catch(err => Promise.reject(err))
+      .catch(err => Promise$1.reject(err))
   }
 
   /**
@@ -1726,7 +1726,7 @@ class VueAuthenticate {
    */
   logout(requestOptions) {
     if (!this.isAuthenticated()) {
-      return Promise.reject(
+      return Promise$1.reject(
         new Error('There is no currently authenticated user')
       );
     }
@@ -1746,12 +1746,12 @@ class VueAuthenticate {
       return this.$http(requestOptions)
         .then((response) => {
           this.storage.removeItem(this.tokenName);
-          return Promise.resolve(response);
+          return Promise$1.resolve(response);
         })
-        .catch(err => Promise.reject(err))
+        .catch(err => Promise$1.reject(err))
     } else {
       this.storage.removeItem(this.tokenName);
-      return Promise.resolve();
+      return Promise$1.resolve();
     }
   }
 
@@ -1813,7 +1813,7 @@ class VueAuthenticate {
    * @return {Promise}               Request promise
    */
   authenticate(provider, userData) {
-    return new Promise((resolve, reject) => {
+    return new Promise$1((resolve, reject) => {
       var providerConfig = this.options.providers[provider];
       if (!providerConfig) {
         return reject(new Error('Unknown provider'));
@@ -1866,7 +1866,7 @@ class VueAuthenticate {
    * @return {Promise}               Request promise
    */
   link(provider, userData) {
-    return new Promise((resolve, reject) => {
+    return new Promise$1((resolve, reject) => {
       var providerConfig = this.options.providers[provider];
       if (!providerConfig) {
         return reject(new Error('Unknown provider'));
@@ -1929,7 +1929,7 @@ class VueAuthenticate {
 
   runAuthInterceptor(error) {
     var chain = [];
-    var promise = Promise.reject(error);
+    var promise = Promise$1.reject(error);
 
     this.options.refreshAuthFailInterceptors.forEach((interceptor)=>{
       chain.unshift(interceptor);
@@ -1942,7 +1942,7 @@ class VueAuthenticate {
     return promise;
   }
 
-  defaultBindResponseInterceptor = ($auth) => {
+  defaultBindResponseInterceptor($auth) {
     $auth.$http.interceptors.response.use((response) => {
       return response
     }, (error) => {
@@ -1990,14 +1990,14 @@ class VueAuthenticate {
           }
         }else {
           // If refresh is already going, our request will run after it, e.g. when refreshed
-          return new Promise((resolve, reject) =>{
+          return new Promise$1((resolve, reject) =>{
             setTimeout(()=>{
               $auth.$http(originalRequest).then(resolve).catch(reject);
             }, 100);
           });
         }
       }
-      return Promise.reject(error)
+      return Promise$1.reject(error)
     });
   }
 
