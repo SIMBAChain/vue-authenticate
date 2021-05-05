@@ -1,5 +1,5 @@
 /**
- * vue-authenticate v1.5.7
+ * vue-authenticate v1.5.8
  * https://github.com/dgrubelic/vue-authenticate
  * Released under the MIT License.
  * 
@@ -1970,49 +1970,56 @@
       // 2. refreshType is set
       // 3. any token is set
       // if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
-      if (status === 401 && $auth.options.refreshType && $auth.isTokenSet()) {
+      if (status === 401 && $auth.options.refreshType) {
+        console.log("Got 401 with refresh type");
+        if($auth.isTokenSet()){
+          console.log("Token was set");
+          // check if we are already refreshing, to prevent endless loop
+          if (!$auth._isRefreshing) {
+            if($auth.last_token_refresh_attempt &&
+              ((new Date) - $auth.last_token_refresh_attempt) < 5*60*100){ //check we haven't tried to refresh in the last 5 minutes
+              // Don't retry a refresh on fail
+              return $auth.runAuthInterceptor(error);
+            }
+            $auth._isRefreshing = true;
+            $auth.last_token_refresh_attempt = new Date();
+            // Try to refresh our token
+            try {
+              return $auth.refresh()
+                .then(function (response) {
+                  // refreshing was successful :)
+                  $auth._isRefreshing = false;
+                  // send original request
+                  return $auth.$http(originalRequest)
+                })
+                .catch(function (error) {
+                  // Refreshing fails :(
+                  $auth._isRefreshing = false;
+                  // return Promise.reject(error)
+                  return $auth.runAuthInterceptor(error)
+                })
+            }catch (e){
+              console.log("Shouldn't be here!");
+              console.log(e);
+              $auth._isRefreshing = false;
+              // return Promise.reject(error)
+              return $auth.runAuthInterceptor(error)
 
-        // check if we are already refreshing, to prevent endless loop
-        if (!$auth._isRefreshing) {
-          if($auth.last_token_refresh_attempt &&
-            ((new Date) - $auth.last_token_refresh_attempt) < 5*60*100){ //check we haven't tried to refresh in the last 5 minutes
-            // Don't retry a refresh on fail
-            return $auth.runAuthInterceptor(error);
-          }
-          $auth._isRefreshing = true;
-          $auth.last_token_refresh_attempt = new Date();
-          // Try to refresh our token
-          try {
-            return $auth.refresh()
-              .then(function (response) {
-                // refreshing was successful :)
-                $auth._isRefreshing = false;
-                // send original request
-                return $auth.$http(originalRequest)
-              })
-              .catch(function (error) {
-                // Refreshing fails :(
-                $auth._isRefreshing = false;
-                // return Promise.reject(error)
-                return $auth.runAuthInterceptor(error)
-              })
-          }catch (e){
-            console.log("Shouldn't be here!");
-            console.log(e);
-            $auth._isRefreshing = false;
-            // return Promise.reject(error)
-            return $auth.runAuthInterceptor(error)
-
+            }
+          }else {
+            // If refresh is already going, our request will run after it, e.g. when refreshed
+            return new Promise$1(function (resolve, reject) {
+              setTimeout(function (){
+                $auth.$http(originalRequest).then(resolve).catch(reject);
+              }, 100);
+            });
           }
         }else {
-          // If refresh is already going, our request will run after it, e.g. when refreshed
-          return new Promise$1(function (resolve, reject) {
-            setTimeout(function (){
-              $auth.$http(originalRequest).then(resolve).catch(reject);
-            }, 100);
-          });
+          console.log("Token was not set");
+          return $auth.runAuthInterceptor(error)
         }
       }
+      console.log("fell through");
       return Promise$1.reject(error)
     });
   };
