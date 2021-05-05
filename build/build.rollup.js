@@ -1,8 +1,6 @@
-var fs = require('fs');
 var rollup = require('rollup');
-var uglify = require('uglify-js');
 var buble = require('@rollup/plugin-buble');
-var uglify = require('rollup-plugin-uglify').uglify;
+var terser = require('rollup-plugin-terser').terser;
 var rollupBanner = require('rollup-plugin-banner').default;
 var eslint  = require('rollup-plugin-eslint').eslint;
 var package = require('../package.json');
@@ -40,7 +38,7 @@ buildSource(
 buildSource(
   {
     input: 'src/index.js',
-    plugins: [buble(), uglify(), rollupBanner(banner)],
+    plugins: [buble(), terser(), rollupBanner(banner)],
   },
   {
     file: 'dist/vue-authenticate.min.js',

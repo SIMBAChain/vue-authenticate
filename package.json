@@ -1,12 +1,15 @@
 {
   "name": "@simbachain/vue-authenticate",
-  "version": "1.5.8",
+  "version": "1.5.9",
   "description": "Authentication library for Vue.js",
   "main": "dist/vue-authenticate.common.js",
+
   "module": "dist/vue-authenticate.esm.js",
   "unpkg": "dist/vue-authenticate.js",
   "scripts": {
-    "build": "node build/build.rollup.js"
+    "build": "node build/build.rollup.js",
+    "audit:fix": "npx yarn-audit-fix",
+    "audit": "yarn audit"
   },
   "keywords": [
     "vue",
@@ -56,7 +59,7 @@
     "rollup-plugin-babel": "^4.4.0",
     "rollup-plugin-banner": "^0.2.1",
     "rollup-plugin-eslint": "^7.0.0",
-    "rollup-plugin-uglify": "^6.0.4",
+    "rollup-plugin-terser": "^7.0.2",
     "uglify-js": "^3.13.5"
   },
   "peerDependencies": {},
